@@ -47,7 +47,7 @@ func main() {
 	handler := syslog.NewChannelHandler(channel)
 
 	server := syslog.NewServer()
-	server.SetFormat(syslog.RFC5424)
+	server.SetFormat(syslog.Automatic)
 	server.SetHandler(handler)
 
 	err = server.ListenUDP(":514")
@@ -63,7 +63,7 @@ func main() {
 	go func(channel syslog.LogPartsChannel) {
 		for log := range channel {
 			for k, v := range log {
-				fmt.Println(k, ": ", v)
+				fmt.Println(k, ":", v)
 			}
 		}
 	}(channel)
