@@ -50,7 +50,7 @@ func main() {
 	server.SetFormat(syslog.RFC5424)
 	server.SetHandler(handler)
 
-	err = server.ListenUDP("localhost:514")
+	err = server.ListenUDP(":514")
 	if err != nil {
 		log.Printf("Error configuring server for UDP listen: %s", err)
 	}
@@ -61,8 +61,10 @@ func main() {
 	}
 
 	go func(channel syslog.LogPartsChannel) {
-		for logs := range channel {
-			fmt.Println(logs)
+		for log := range channel {
+			for k, v := range log {
+				fmt.Println(k, ": ", v)
+			}
 		}
 	}(channel)
 
