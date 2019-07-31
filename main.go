@@ -1,39 +1,45 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	syslog "gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
-	"gopkg.in/mgo.v2/bson"
 )
 
 var config struct {
-	DBHost string `json:"DBHost"`
+	DBHost     string `json:"DBHost"`
+	DBName     string `json:"DBName"`
+	Collection string `json:"Collection"`
+	DBUser     string `json:"DBUser"`
+	DBPassword string `json:"DBPassword"`
 }
 
 type switchLog struct {
-	ID           bson.ObjectId `bson:"_id"`
-	SwName       string        `bson:"swname"`
-	SwIP         string        `bson:"swip"`
-	LogTime      string        `bson:"logtime"`
-	LogMessage   string        `bson:"logmsg"`
-	LogTimeStamp time.Time     `bson:"logtimestamp"`
-	LogFacility  int           `bson:"logfac"`
-	LogSeverity  int           `bson:"logsev"`
-	LogPriority  int           `bson:"logpri"`
+	SwName       string
+	SwIP         string
+	LogTimeStamp time.Time
+	LogFacility  int
+	LogSeverity  int
+	LogPriority  int
+	LogTime      string
+	LogMessage   string
 }
 
 func main() {
 	var (
-		//confPath = "conf.json"
-		err error
+		confPath = "conf.json"
+		err      error
 	)
 
-	/*confdata, err := ioutil.ReadFile(confPath)
+	confdata, err := ioutil.ReadFile(confPath)
 	if err != nil {
 		log.Printf("Error reading config file: %s", err)
 	}
@@ -43,13 +49,27 @@ func main() {
 		log.Printf("Error unmarshalling config file: %s", err)
 	}
 
-	session, err := mgo.Dial(config.DBHost)
-	if err != nil {
-		log.Printf("Error connectiong to database: %s", err)
+	opts := options.Client().ApplyURI(config.DBHost)
+	opts = &options.ClientOptions{
+		Auth: &options.Credential{
+			Username: config.DBUser,
+			Password: config.DBPassword,
+		},
 	}
-	defer session.Close()
 
-	logsCollection := session.DB("logsdb").C("logs")*/
+	client, err := mongo.NewClient(opts)
+
+	err = client.Connect(context.TODO())
+	if err != nil {
+		log.Printf("Error connecting to database: %s", err)
+	}
+
+	err = client.Ping(context.TODO(), nil)
+	if err != nil {
+		log.Printf("Error checking connection: %s", err)
+	}
+
+	logsCollection := client.Database(config.DBName).Collection(config.Collection)
 
 	channel := make(syslog.LogPartsChannel)
 	handler := syslog.NewChannelHandler(channel)
@@ -71,15 +91,11 @@ func main() {
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
 			l := parseLog(logmap)
-			fmt.Println("Facility:", l.LogFacility)
-			fmt.Println("Severity:", l.LogSeverity)
-			fmt.Println("Priority:", l.LogPriority)
-			fmt.Println("Switch Name:", l.SwName)
-			fmt.Println("Switch IP:", l.SwIP)
-			fmt.Println("Time:", l.LogTime)
-			fmt.Println("TimeStamp:", l.LogTimeStamp)
-			fmt.Println("Message:", l.LogMessage)
-			fmt.Println()
+
+			_, err := logsCollection.InsertOne(context.TODO(), l)
+			if err != nil {
+				log.Printf("Error inserting log data to database: %s", err)
+			}
 		}
 	}(channel)
 
