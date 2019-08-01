@@ -25,7 +25,7 @@ var config struct {
 type switchLog struct {
 	SwName       string
 	SwIP         string
-	LogTimeStamp time.Time
+	LogTimeStamp string
 	LogFacility  int
 	LogSeverity  int
 	LogPriority  int
@@ -128,7 +128,7 @@ func parseLog(logmap format.LogParts) switchLog {
 		case "client":
 			l.SwIP = strings.Split(val.(string), ":")[0]
 		case "timestamp":
-			l.LogTimeStamp = val.(time.Time)
+			l.LogTimeStamp = val.(time.Time).Format("2006-01-02 15:04:05")
 		case "facility":
 			l.LogFacility = val.(int)
 		case "severity":
