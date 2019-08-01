@@ -13,5 +13,6 @@ CREATE TABLE switchlogs
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMMDD(ts_local)
+PRIMARY KEY log_id
 ORDER BY ts_local
 
