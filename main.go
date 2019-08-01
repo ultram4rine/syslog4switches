@@ -20,6 +20,8 @@ var config struct {
 	DBPassword string `json:"dbPassword"`
 }
 
+
+//TODO: fix types
 type switchLog struct {
 	SwName       string `db:"sw_name"`
 	SwIP         string `db:"sw_ip"`
@@ -53,17 +55,6 @@ func main() {
 	}
 	defer conn.Close()
 
-	tx, err := conn.Begin()
-	if err != nil {
-		log.Fatalf("Error starting transaction: %s", err)
-	}
-
-	stmt, err := tx.Prepare("INSERT INTO switchlogs (sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		log.Fatalf("Error preparing statement: %s", err)
-	}
-	defer stmt.Close()
-
 	channel := make(syslog.LogPartsChannel)
 	handler := syslog.NewChannelHandler(channel)
 
@@ -85,9 +76,24 @@ func main() {
 		for logmap := range channel {
 			l := parseLog(logmap)
 
-			_, err = stmt.Exec(l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogMessage)
+			tx, err := conn.Begin()
+			if err != nil {
+				log.Printf("Error starting transaction: %s", err)
+			}
+
+			_, err = tx.Exec("INSERT INTO switchlogs (sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogMessage)
 			if err != nil {
 				log.Printf("Error inserting log to database: %s", err)
+
+				err = tx.Rollback()
+				if err != nil {
+					log.Printf("Error aborting transaction: %s", err)
+				}
+			} else {
+				err = tx.Commit()
+				if err != nil {
+					log.Printf("Error commiting transaction: %s", err)
+				}
 			}
 		}
 	}(channel)
