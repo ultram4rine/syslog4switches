@@ -1,6 +1,9 @@
-CREATE TABLE switchlogs
+CREATE DATABASE IF NOT EXISTS logs
+
+USE logs
+
+CREATE TABLE IF NOT EXISTS logs.switchlogs
 (
-    `log_id` UInt32,
     `ts_local` DateTime,
     `sw_name` String,
     `sw_ip` String,
@@ -13,6 +16,4 @@ CREATE TABLE switchlogs
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMMDD(ts_local)
-PRIMARY KEY log_id
 ORDER BY ts_local
-

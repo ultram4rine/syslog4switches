@@ -39,15 +39,15 @@ func main() {
 
 	confdata, err := ioutil.ReadFile(confPath)
 	if err != nil {
-		log.Printf("Error reading config file: %s", err)
+		log.Fatalf("Error reading config file: %s", err)
 	}
 
 	err = json.Unmarshal(confdata, &config)
 	if err != nil {
-		log.Printf("Error unmarshalling config file: %s", err)
+		log.Fatalf("Error unmarshalling config file: %s", err)
 	}
 
-	conn, err := sqlx.Open("clickhouse", config.DBHost)
+	conn, err := sqlx.Open("clickhouse", config.DBHost+"?username="+config.DBUser+"&password="+config.DBPassword+"&database="+config.DBName)
 	if err != nil {
 		log.Fatalf("Error connection to database: %s", err)
 	}
@@ -55,12 +55,12 @@ func main() {
 
 	tx, err := conn.Begin()
 	if err != nil {
-		log.Printf("Error starting transaction: %s", err)
+		log.Fatalf("Error starting transaction: %s", err)
 	}
 
 	stmt, err := tx.Prepare("INSERT INTO switchlogs (sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
-		log.Printf("Error preparing statement: %s", err)
+		log.Fatalf("Error preparing statement: %s", err)
 	}
 	defer stmt.Close()
 
