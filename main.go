@@ -1,36 +1,34 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"io/ioutil"
 	"log"
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/kshvakov/clickhouse"
 	syslog "gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
 var config struct {
-	DBHost     string `json:"DBHost"`
-	DBName     string `json:"DBName"`
-	Collection string `json:"Collection"`
-	DBUser     string `json:"DBUser"`
-	DBPassword string `json:"DBPassword"`
+	DBHost     string `json:"dbHost"`
+	DBName     string `json:"dbName"`
+	DBUser     string `json:"dbUser"`
+	DBPassword string `json:"dbPassword"`
 }
 
 type switchLog struct {
-	SwName       string
-	SwIP         string
-	LogTimeStamp string
-	LogFacility  int
-	LogSeverity  int
-	LogPriority  int
-	LogTime      string
-	LogMessage   string
+	SwName       string `db:"sw_name"`
+	SwIP         string `db:"sw_ip"`
+	LogTimeStamp string `db:"ts_remote"`
+	LogFacility  int    `db:"facility"`
+	LogSeverity  int    `db:"severity"`
+	LogPriority  int    `db:"priority"`
+	LogTime      string `db:"log_time"`
+	LogMessage   string `db:"log_msg"`
 }
 
 func main() {
@@ -49,27 +47,22 @@ func main() {
 		log.Printf("Error unmarshalling config file: %s", err)
 	}
 
-	opts := options.Client().ApplyURI(config.DBHost)
-	opts = &options.ClientOptions{
-		Auth: &options.Credential{
-			Username: config.DBUser,
-			Password: config.DBPassword,
-		},
-	}
-
-	client, err := mongo.NewClient(opts)
-
-	err = client.Connect(context.TODO())
+	conn, err := sqlx.Open("clickhouse", config.DBHost)
 	if err != nil {
-		log.Printf("Error connecting to database: %s", err)
+		log.Fatalf("Error connection to database: %s", err)
 	}
+	defer conn.Close()
 
-	err = client.Ping(context.TODO(), nil)
+	tx, err := conn.Begin()
 	if err != nil {
-		log.Printf("Error checking connection: %s", err)
+		log.Printf("Error starting transaction: %s", err)
 	}
 
-	logsCollection := client.Database(config.DBName).Collection(config.Collection)
+	stmt, err := tx.Prepare("INSERT INTO switchlogs (sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		log.Printf("Error preparing statement: %s", err)
+	}
+	defer stmt.Close()
 
 	channel := make(syslog.LogPartsChannel)
 	handler := syslog.NewChannelHandler(channel)
@@ -92,9 +85,9 @@ func main() {
 		for logmap := range channel {
 			l := parseLog(logmap)
 
-			_, err := logsCollection.InsertOne(context.TODO(), l)
+			_, err = stmt.Exec(l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogMessage)
 			if err != nil {
-				log.Printf("Error inserting log data to database: %s", err)
+				log.Printf("Error inserting log to database: %s", err)
 			}
 		}
 	}(channel)
