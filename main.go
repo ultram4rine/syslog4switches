@@ -116,6 +116,7 @@ func parseLog(logmap format.LogParts) switchLog {
 				valStr := val.(string)
 				data := strings.Split(strings.Split(valStr, ": ")[0], " ")
 
+				//TODO: Fix parsing date if day >= 10
 				for i, d := range data {
 					if i < 4 {
 						l.LogTime += d + " "
