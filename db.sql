@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS logs.switchlogs
     `severity` UInt32,
     `priority` UInt32,
     `log_time` String,
+    `log_event_number` String,
+    `log_module` String,
     `log_msg` String
 )
 ENGINE = MergeTree()

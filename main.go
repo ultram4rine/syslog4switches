@@ -20,17 +20,17 @@ var config struct {
 	DBPassword string `json:"dbPassword"`
 }
 
-
-//TODO: fix types
 type switchLog struct {
-	SwName       string `db:"sw_name"`
-	SwIP         string `db:"sw_ip"`
-	LogTimeStamp string `db:"ts_remote"`
-	LogFacility  int    `db:"facility"`
-	LogSeverity  int    `db:"severity"`
-	LogPriority  int    `db:"priority"`
-	LogTime      string `db:"log_time"`
-	LogMessage   string `db:"log_msg"`
+	SwName       string
+	SwIP         string
+	LogTimeStamp time.Time
+	LogFacility  int
+	LogSeverity  int
+	LogPriority  int
+	LogTime      string
+	LogEventNum  string
+	LogModule    string
+	LogMessage   string
 }
 
 func main() {
@@ -81,7 +81,7 @@ func main() {
 				log.Printf("Error starting transaction: %s", err)
 			}
 
-			_, err = tx.Exec("INSERT INTO switchlogs (sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogMessage)
+			_, err = tx.Exec("INSERT INTO switchlogs (sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_event_number, log_module, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogEventNum, l.LogModule, l.LogMessage)
 			if err != nil {
 				log.Printf("Error inserting log to database: %s", err)
 
@@ -112,12 +112,16 @@ func parseLog(logmap format.LogParts) switchLog {
 				data := strings.Split(strings.Split(valStr, ": ")[0], " ")
 
 				for i, d := range data {
-					if i < 3 {
+					if i < 4 {
 						l.LogTime += d + " "
 					} else {
 						switch i {
-						case 3:
+						case 4:
 							l.SwName = d
+						case 5:
+							l.LogEventNum = d
+						case 6:
+							l.LogModule = d
 						}
 					}
 				}
@@ -127,7 +131,7 @@ func parseLog(logmap format.LogParts) switchLog {
 		case "client":
 			l.SwIP = strings.Split(val.(string), ":")[0]
 		case "timestamp":
-			l.LogTimeStamp = val.(time.Time).Format("2006-01-02 15:04:05")
+			l.LogTimeStamp = val.(time.Time)
 		case "facility":
 			l.LogFacility = val.(int)
 		case "severity":
