@@ -81,7 +81,7 @@ func main() {
 				log.Printf("Error starting transaction: %s", err)
 			}
 
-			_, err = tx.Exec("INSERT INTO switchlogs (sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_event_number, log_module, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogEventNum, l.LogModule, l.LogMessage)
+			_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_event_number, log_module, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", time.Now().Format("2006-01-02 15:04:05"), l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogEventNum, l.LogModule, l.LogMessage)
 			if err != nil {
 				log.Printf("Error inserting log to database: %s", err)
 
