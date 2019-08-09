@@ -114,19 +114,28 @@ func parseLog(logmap format.LogParts) switchLog {
 		case "content":
 			{
 				valStr := val.(string)
-				data := strings.Split(strings.Split(valStr, ": ")[0], " ")
+				dataStr := strings.Split(valStr, ": ")[0]
 
-				//TODO: Fix parsing date if day >= 10
+				p := strings.IndexAny(dataStr, "1234567890")
+				if strings.ContainsAny(string(dataStr[p+1]), "1234567890") {
+					r := []rune(dataStr)
+					r[p-1] = '0'
+
+					dataStr = string(r)
+				}
+
+				data := strings.Split(dataStr, " ")
+
 				for i, d := range data {
-					if i < 4 {
+					if i < 3 {
 						l.LogTime += d + " "
 					} else {
 						switch i {
-						case 4:
+						case 3:
 							l.SwName = d
-						case 5:
+						case 4:
 							l.LogEventNum = d
-						case 6:
+						case 5:
 							l.LogModule = d
 						}
 					}
