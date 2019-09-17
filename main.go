@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -116,13 +117,8 @@ func parseLog(logmap format.LogParts) switchLog {
 				valStr := val.(string)
 				dataStr := strings.Split(valStr, ": ")[0]
 
-				p := strings.IndexAny(dataStr, "1234567890")
-				if strings.ContainsAny(string(dataStr[p+1]), "1234567890") {
-					r := []rune(dataStr)
-					r[p-1] = '0'
-
-					dataStr = string(r)
-				}
+				reg := regexp.MustCompile(`[\s\p{Zs}]{2,}`)
+				dataStr = reg.ReplaceAllString(dataStr, " ")
 
 				data := strings.Split(dataStr, " ")
 
