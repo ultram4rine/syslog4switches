@@ -1,0 +1,11 @@
+[Unit]
+Description=Syslog Server
+
+[Service]
+WorkingDirectory=/usr/local/sbin/syslog-serv/
+ExecStart=/usr/local/sbin/syslog-serv/syslog-serv
+User=root
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
