@@ -6,13 +6,13 @@ CREATE TABLE IF NOT EXISTS logs.switchlogs
 (
     `ts_local` DateTime,
     `sw_name` String,
-    `sw_ip` String,
+    `sw_ip` IPv4,
     `ts_remote` DateTime,
-    `facility` UInt32,
-    `severity` UInt32,
-    `priority` UInt32,
+    `facility` UInt8,
+    `severity` UInt8,
+    `priority` UInt8,
     `log_time` String,
-    `log_event_number` String,
+    `log_event_number` UInt16,
     `log_module` String,
     `log_msg` String
 )

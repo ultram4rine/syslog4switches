@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,11 +26,11 @@ type switchLog struct {
 	SwName       string
 	SwIP         string
 	LogTimeStamp time.Time
-	LogFacility  int
-	LogSeverity  int
-	LogPriority  int
+	LogFacility  uint8
+	LogSeverity  uint8
+	LogPriority  uint8
 	LogTime      string
-	LogEventNum  string
+	LogEventNum  uint16
 	LogModule    string
 	LogMessage   string
 }
@@ -130,7 +131,12 @@ func parseLog(logmap format.LogParts) switchLog {
 						case 3:
 							l.SwName = d
 						case 4:
-							l.LogEventNum = d
+							eventNum, err := strconv.ParseUint(d, 10, 16)
+							if err != nil {
+								log.Fatal(err)
+							} else {
+								l.LogEventNum = uint16(eventNum)
+							}
 						case 5:
 							l.LogModule = d
 						}
@@ -144,11 +150,11 @@ func parseLog(logmap format.LogParts) switchLog {
 		case "timestamp":
 			l.LogTimeStamp = val.(time.Time)
 		case "facility":
-			l.LogFacility = val.(int)
+			l.LogFacility = val.(uint8)
 		case "severity":
-			l.LogSeverity = val.(int)
+			l.LogSeverity = val.(uint8)
 		case "priority":
-			l.LogPriority = val.(int)
+			l.LogPriority = val.(uint8)
 		}
 	}
 
