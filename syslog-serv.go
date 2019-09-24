@@ -76,7 +76,10 @@ func main() {
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
-			l := parseLog(logmap)
+			l, err := parseLog(logmap)
+			if err != nil {
+				log.Printf("Error parsing log: %s", err)
+			}
 
 			tx, err := conn.Begin()
 			if err != nil {
@@ -108,7 +111,7 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts) switchLog {
+func parseLog(logmap format.LogParts) (switchLog, error) {
 	var l switchLog
 
 	for key, val := range logmap {
@@ -137,7 +140,7 @@ func parseLog(logmap format.LogParts) switchLog {
 						case 4:
 							eventNum, err := strconv.ParseUint(d, 10, 16)
 							if err != nil {
-								log.Fatal(err)
+								return l, err
 							} else {
 								l.LogEventNum = uint16(eventNum)
 							}
@@ -150,7 +153,7 @@ func parseLog(logmap format.LogParts) switchLog {
 				l.LogMessage = strings.Split(valStr, ": ")[1]
 				l.LogTime, err = time.Parse("Jan 2 15:04:05", logTime)
 				if err != nil {
-					log.Printf("Error parsing log time: %s", err)
+					return l, err
 				}
 			}
 		case "client":
@@ -166,5 +169,5 @@ func parseLog(logmap format.LogParts) switchLog {
 		}
 	}
 
-	return l
+	return l, nil
 }
