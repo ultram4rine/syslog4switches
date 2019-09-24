@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS logs.switchlogs
     `facility` UInt8,
     `severity` UInt8,
     `priority` UInt8,
-    `log_time` String,
+    `log_time` DateTime,
     `log_event_number` UInt16,
     `log_module` String,
     `log_msg` String

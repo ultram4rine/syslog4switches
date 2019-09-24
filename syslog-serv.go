@@ -29,7 +29,7 @@ type switchLog struct {
 	LogFacility  uint8
 	LogSeverity  uint8
 	LogPriority  uint8
-	LogTime      string
+	LogTime      time.Time
 	LogEventNum  uint16
 	LogModule    string
 	LogMessage   string
@@ -115,8 +115,12 @@ func parseLog(logmap format.LogParts) switchLog {
 		switch key {
 		case "content":
 			{
-				valStr := val.(string)
-				dataStr := strings.Split(valStr, ": ")[0]
+				var (
+					err     error
+					logTime string
+					valStr  = val.(string)
+					dataStr = strings.Split(valStr, ": ")[0]
+				)
 
 				reg := regexp.MustCompile(`[\s\p{Zs}]{2,}`)
 				dataStr = reg.ReplaceAllString(dataStr, " ")
@@ -125,7 +129,7 @@ func parseLog(logmap format.LogParts) switchLog {
 
 				for i, d := range data {
 					if i < 3 {
-						l.LogTime += d + " "
+						logTime += d + " "
 					} else {
 						switch i {
 						case 3:
@@ -144,6 +148,10 @@ func parseLog(logmap format.LogParts) switchLog {
 				}
 
 				l.LogMessage = strings.Split(valStr, ": ")[1]
+				l.LogTime, err = time.Parse("Jan 2 15:04:05", logTime)
+				if err != nil {
+					log.Printf("Error parsing log time: %s", err)
+				}
 			}
 		case "client":
 			l.SwIP = strings.Split(val.(string), ":")[0]
