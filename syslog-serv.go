@@ -64,7 +64,7 @@ func main() {
 		log.Fatalf("Error getting time zone: %s", err)
 	}
 
-	channel := make(syslog.LogPartsChannel)
+	channel := make(syslog.LogPartsChannel, 1000)
 	handler := syslog.NewChannelHandler(channel)
 
 	server := syslog.NewServer()
