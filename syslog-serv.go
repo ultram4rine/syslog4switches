@@ -15,6 +15,8 @@ import (
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
+var reg = regexp.MustCompile(`[\s\p{Zs}]{2,}`)
+
 var config struct {
 	DBHost     string `json:"dbHost"`
 	DBName     string `json:"dbName"`
@@ -57,6 +59,11 @@ func main() {
 	}
 	defer conn.Close()
 
+	loc, err := time.LoadLocation("Europe/Saratov")
+	if err != nil {
+		log.Fatalf("Error getting time zone: %s", err)
+	}
+
 	channel := make(syslog.LogPartsChannel)
 	handler := syslog.NewChannelHandler(channel)
 
@@ -84,11 +91,6 @@ func main() {
 			tx, err := conn.Begin()
 			if err != nil {
 				log.Printf("Error starting transaction: %s", err)
-			}
-
-			loc, err := time.LoadLocation("Europe/Saratov")
-			if err != nil {
-				log.Printf("Error getting time zone: %s", err)
 			}
 
 			_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_event_number, log_module, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", time.Now().In(loc), l.SwName, l.SwIP, l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogEventNum, l.LogModule, l.LogMessage)
@@ -125,7 +127,6 @@ func parseLog(logmap format.LogParts) (switchLog, error) {
 					dataStr = strings.Split(valStr, ": ")[0]
 				)
 
-				reg := regexp.MustCompile(`[\s\p{Zs}]{2,}`)
 				dataStr = reg.ReplaceAllString(dataStr, " ")
 
 				data := strings.Split(dataStr, " ")
