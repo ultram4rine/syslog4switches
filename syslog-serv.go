@@ -142,9 +142,9 @@ func parseLog(logmap format.LogParts) (switchLog, error) {
 							eventNum, err := strconv.ParseUint(d, 10, 16)
 							if err != nil {
 								return l, err
-							} else {
-								l.LogEventNum = uint16(eventNum)
 							}
+
+							l.LogEventNum = uint16(eventNum)
 						case 5:
 							l.LogModule = d
 						}
