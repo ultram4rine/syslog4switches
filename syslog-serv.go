@@ -162,11 +162,11 @@ func parseLog(logmap format.LogParts) (switchLog, error) {
 		case "timestamp":
 			l.LogTimeStamp = val.(time.Time)
 		case "facility":
-			l.LogFacility = val.(uint8)
+			l.LogFacility = uint8(val.(int))
 		case "severity":
-			l.LogSeverity = val.(uint8)
+			l.LogSeverity = uint8(val.(int))
 		case "priority":
-			l.LogPriority = val.(uint8)
+			l.LogPriority = uint8(val.(int))
 		}
 	}
 
