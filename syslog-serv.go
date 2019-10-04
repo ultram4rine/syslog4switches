@@ -125,8 +125,10 @@ func parseLog(logmap format.LogParts) (switchLog, error) {
 					err     error
 					logTime string
 					valStr  = val.(string)
-					dataStr = strings.Split(valStr, ": ")[0]
 				)
+
+				dataStr := strings.Split(valStr, ": ")[0]
+				l.LogMessage = strings.Split(valStr, ": ")[1]
 
 				dataStr = reg.ReplaceAllString(dataStr, " ")
 
@@ -152,7 +154,6 @@ func parseLog(logmap format.LogParts) (switchLog, error) {
 					}
 				}
 
-				l.LogMessage = strings.Split(valStr, ": ")[1]
 				l.LogTime, err = time.Parse("Jan 2 15:04:05", logTime[0:len(logTime)-1])
 				if err != nil {
 					return l, err
