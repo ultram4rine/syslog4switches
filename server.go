@@ -91,6 +91,7 @@ func main() {
 			tx, err := conn.Begin()
 			if err != nil {
 				log.Printf("Error starting transaction: %s", err)
+				continue
 			}
 
 			_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)", time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
