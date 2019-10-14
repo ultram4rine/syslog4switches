@@ -2,16 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/kshvakov/clickhouse"
+	snmp "github.com/soniah/gosnmp"
 	syslog "gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
@@ -32,9 +33,6 @@ type switchLog struct {
 	LogFacility  uint8
 	LogSeverity  uint8
 	LogPriority  uint8
-	LogTime      time.Time
-	LogEventNum  uint16
-	LogModule    string
 	LogMessage   string
 }
 
@@ -87,6 +85,7 @@ func main() {
 			l, err := parseLog(logmap)
 			if err != nil {
 				log.Printf("Error parsing log: %s", err)
+				continue
 			}
 
 			tx, err := conn.Begin()
@@ -94,7 +93,7 @@ func main() {
 				log.Printf("Error starting transaction: %s", err)
 			}
 
-			_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_time, log_event_number, log_module, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogTime, l.LogEventNum, l.LogModule, l.LogMessage)
+			_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)", time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
 			if err != nil {
 				log.Printf("Error inserting log to database: %s", err)
 
@@ -115,50 +114,15 @@ func main() {
 }
 
 func parseLog(logmap format.LogParts) (switchLog, error) {
-	var l switchLog
+	var (
+		l   switchLog
+		err error
+	)
 
 	for key, val := range logmap {
 		switch key {
 		case "content":
-			{
-				var (
-					err     error
-					logTime string
-					valStr  = val.(string)
-				)
-
-				dataStr := strings.Split(valStr, ": ")[0]
-				l.LogMessage = strings.Split(valStr, ": ")[1]
-
-				dataStr = reg.ReplaceAllString(dataStr, " ")
-
-				data := strings.Split(dataStr, " ")
-
-				for i, d := range data {
-					if i < 3 {
-						logTime += d + " "
-					} else {
-						switch i {
-						case 3:
-							l.SwName = d
-						case 4:
-							eventNum, err := strconv.ParseUint(d, 10, 16)
-							if err != nil {
-								return l, err
-							}
-
-							l.LogEventNum = uint16(eventNum)
-						case 5:
-							l.LogModule = d
-						}
-					}
-				}
-
-				l.LogTime, err = time.Parse("Jan 2 15:04:05", logTime[0:len(logTime)-1])
-				if err != nil {
-					return l, err
-				}
-			}
+			l.LogMessage = val.(string)
 		case "client":
 			l.SwIP = strings.Split(val.(string), ":")[0]
 		case "timestamp":
@@ -172,5 +136,40 @@ func parseLog(logmap format.LogParts) (switchLog, error) {
 		}
 	}
 
+	l.SwName, err = getSwitchName(l.SwIP)
+	if err != nil {
+		return l, err
+	}
+
 	return l, nil
+}
+
+func getSwitchName(IP string) (string, error) {
+	var switchName string
+
+	snmp.Default.Target = IP
+
+	err := snmp.Default.Connect()
+	if err != nil {
+		return "", err
+	}
+	defer snmp.Default.Conn.Close()
+
+	oid := []string{".1.3.6.1.2.1.1.5.0"}
+
+	result, err := snmp.Default.Get(oid)
+	if err != nil {
+		return "", err
+	}
+
+	for _, variable := range result.Variables {
+		if variable.Type != snmp.OctetString {
+			return "", errors.New("can't get switch name")
+		}
+
+		bytes := variable.Value.([]byte)
+		switchName = string(bytes)
+	}
+
+	return switchName, nil
 }
