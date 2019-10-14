@@ -2,8 +2,8 @@
 Description=Syslog Server
 
 [Service]
-WorkingDirectory=/usr/local/sbin/syslog-serv/
-ExecStart=/usr/local/sbin/syslog-serv/syslog-serv
+WorkingDirectory=/usr/local/sbin/syslog4switches/
+ExecStart=/usr/local/sbin/syslog4switches/server
 User=root
 Restart=always
 
