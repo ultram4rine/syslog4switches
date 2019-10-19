@@ -180,7 +180,7 @@ func makeSwitchMap(db *sqlx.DB) (map[string]string, error) {
 		switches []netmapSwitch
 	)
 
-	err := db.Select(&switches, "SELECT name, ip FROM unetmap_host")
+	err := db.Select(&switches, "SELECT name, ip FROM unetmap_host WHERE ip IS NOT NULL AND WHERE type_id = ?", 4)
 	if err != nil {
 		return nil, err
 	}
