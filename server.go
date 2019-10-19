@@ -93,12 +93,12 @@ func main() {
 
 	err = server.ListenUDP(":514")
 	if err != nil {
-		log.Printf("Error configuring server for UDP listen: %s", err)
+		log.Fatalf("Error configuring server for UDP listen: %s", err)
 	}
 
 	err = server.Boot()
 	if err != nil {
-		log.Printf("Error starting server: %s", err)
+		log.Fatalf("Error starting server: %s", err)
 	}
 
 	swMap := make(map[string]string)
@@ -180,7 +180,7 @@ func makeSwitchMap(db *sqlx.DB) (map[string]string, error) {
 		switches []netmapSwitch
 	)
 
-	err := db.Select(&switches, "SELECT name, ip FROM unetmap_host WHERE ip IS NOT NULL AND WHERE type_id = ?", 4)
+	err := db.Select(&switches, "SELECT name, ip FROM unetmap_host WHERE ip IS NOT NULL AND type_id = 4")
 	if err != nil {
 		return nil, err
 	}
