@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
