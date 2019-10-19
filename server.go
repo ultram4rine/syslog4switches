@@ -17,8 +17,6 @@ import (
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
-var reg = regexp.MustCompile(`[\s\p{Zs}]{2,}`)
-
 var config struct {
 	DBHost     string `json:"dbHost"`
 	DBName     string `json:"dbName"`
