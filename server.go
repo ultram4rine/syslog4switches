@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,7 +188,16 @@ func makeSwitchMap(db *sqlx.DB) (map[string]string, error) {
 	}
 
 	for _, sw := range switches {
-		swMap[sw.IP] = sw.Name
+
+		intIP, err := strconv.Atoi(sw.IP)
+		if err != nil {
+			log.Printf("Error converting string IP to int IP: %s", err)
+			return swMap, err
+		}
+
+		realIP := fmt.Sprintf("%d.%d.%d.%d", byte(intIP>>24), byte(intIP>>16), byte(intIP>>8), byte(intIP))
+
+		swMap[realIP] = sw.Name
 	}
 
 	return swMap, nil
