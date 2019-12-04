@@ -27,6 +27,8 @@ var config struct {
 	DBNetmapName string `json:"dbNetmapName"`
 	DBNetmapUser string `json:"dbNetmapUser"`
 	DBNetmapPass string `json:"dbNetmapPass"`
+
+	IPNet string `json:"ipNet"`
 }
 
 type netmapSwitch struct {
@@ -46,7 +48,7 @@ type switchLog struct {
 
 func main() {
 	var (
-		confPath = "conf.json"
+		confPath = "syslog4switches.conf.json"
 		err      error
 	)
 
@@ -58,6 +60,11 @@ func main() {
 	err = json.Unmarshal(confdata, &config)
 	if err != nil {
 		log.Fatalf("Error unmarshalling config file: %s", err)
+	}
+
+	_, network, err := net.ParseCIDR(config.IPNet)
+	if err != nil {
+		log.Fatalf("Error parsing network's IP %s: %s", config.IPNet, err)
 	}
 
 	dbConf := mysql.NewConfig()
@@ -121,26 +128,27 @@ func main() {
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
-			l := parseLog(logmap, swMap)
-
-			tx, err := conn.Begin()
+			l, err := parseLog(logmap, network, swMap)
 			if err != nil {
-				log.Printf("Error starting transaction: %s", err)
-				continue
-			}
-
-			_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)", time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
-			if err != nil {
-				log.Printf("Error inserting log to database: %s", err)
-
-				err = tx.Rollback()
+				tx, err := conn.Begin()
 				if err != nil {
-					log.Printf("Error aborting transaction: %s", err)
+					log.Printf("Error starting transaction: %s", err)
+					continue
 				}
-			} else {
-				err = tx.Commit()
+
+				_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)", time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
 				if err != nil {
-					log.Printf("Error commiting transaction: %s", err)
+					log.Printf("Error inserting log to database: %s", err)
+
+					err = tx.Rollback()
+					if err != nil {
+						log.Printf("Error aborting transaction: %s", err)
+					}
+				} else {
+					err = tx.Commit()
+					if err != nil {
+						log.Printf("Error commiting transaction: %s", err)
+					}
 				}
 			}
 		}
@@ -149,7 +157,7 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts, swMap map[string]string) switchLog {
+func parseLog(logmap format.LogParts, network *net.IPNet, swMap map[string]string) (switchLog, error) {
 	var (
 		l switchLog
 	)
@@ -159,7 +167,12 @@ func parseLog(logmap format.LogParts, swMap map[string]string) switchLog {
 		case "content":
 			l.LogMessage = val.(string)
 		case "client":
-			l.SwIP = strings.Split(val.(string), ":")[0]
+			{
+				l.SwIP = strings.Split(val.(string), ":")[0]
+				if !network.Contains(net.ParseIP(l.SwIP)) {
+					return l, fmt.Errorf("ip not in switch network")
+				}
+			}
 		case "timestamp":
 			l.LogTimeStamp = val.(time.Time)
 		case "facility":
@@ -173,7 +186,7 @@ func parseLog(logmap format.LogParts, swMap map[string]string) switchLog {
 
 	l.SwName = swMap[l.SwIP]
 
-	return l
+	return l, nil
 }
 
 func makeSwitchMap(db *sqlx.DB) (map[string]string, error) {
