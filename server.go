@@ -117,19 +117,20 @@ func main() {
 		if err != nil {
 			log.Printf("Error making map[ip]name: %s", err)
 		}
+		log.Printf("Map of ip's and names maked!")
 
 		for range time.Tick(time.Minute * 30) {
 			swMap, err = makeSwitchMap(db)
 			if err != nil {
 				log.Printf("Error making map[ip]name: %s", err)
 			}
+			log.Printf("Map of ip's and names updated!")
 		}
 	}(dbNetmap)
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
-			l, err := parseLog(logmap, network, swMap)
-			if err != nil {
+			if l, err := parseLog(logmap, network, swMap); err == nil {
 				tx, err := conn.Begin()
 				if err != nil {
 					log.Printf("Error starting transaction: %s", err)
@@ -201,7 +202,6 @@ func makeSwitchMap(db *sqlx.DB) (map[string]string, error) {
 	}
 
 	for _, sw := range switches {
-
 		intIP, err := strconv.Atoi(sw.IP)
 		if err != nil {
 			log.Printf("Error converting string IP to int IP: %s", err)
