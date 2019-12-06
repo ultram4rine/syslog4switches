@@ -1,5 +1,5 @@
 [Unit]
-Description=Syslog Server
+Description=Syslog Server for switches
 
 [Service]
 WorkingDirectory=/usr/local/sbin/syslog4switches/

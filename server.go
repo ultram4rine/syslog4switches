@@ -100,7 +100,7 @@ func main() {
 	server.SetFormat(syslog.Automatic)
 	server.SetHandler(handler)
 
-	err = server.ListenUDP(":514")
+	err = server.ListenUnixgram(":514")
 	if err != nil {
 		log.Fatalf("Error configuring server for UDP listen: %s", err)
 	}
