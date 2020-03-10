@@ -1,10 +1,9 @@
-module git.sgu.ru/ultramarine/syslog-serv
+module git.sgu.ru/ultramarine/syslog4switches
 
-go 1.13
+go 1.14
 
 require (
-	github.com/go-sql-driver/mysql v1.4.1
+	github.com/ClickHouse/clickhouse-go v1.3.14
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/kshvakov/clickhouse v1.3.11
 	gopkg.in/mcuadros/go-syslog.v2 v2.3.0
 )

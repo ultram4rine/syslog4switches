@@ -10,30 +10,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/ClickHouse/clickhouse-go"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/kshvakov/clickhouse"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
 var config struct {
-	DBHost     string `json:"dbHost"`
-	DBName     string `json:"dbName"`
-	DBUser     string `json:"dbUser"`
-	DBPassword string `json:"dbPassword"`
-
-	DBNetmapHost string `json:"dbNetmapHost"`
-	DBNetmapName string `json:"dbNetmapName"`
-	DBNetmapUser string `json:"dbNetmapUser"`
-	DBNetmapPass string `json:"dbNetmapPass"`
-
-	IPNet string `json:"ipNet"`
+	Port string `toml:"listen_port"`
+	DB   db     `toml:"db"`
 }
 
-type netmapSwitch struct {
-	Name string `db:"name"`
-	IP   string `db:"ip"`
+type db struct {
+	Host string `toml:"host"`
+	Name string `toml:"name"`
+	User string `toml:"user"`
+	Pass string `toml:"pass"`
 }
 
 type switchLog struct {
@@ -46,47 +38,20 @@ type switchLog struct {
 	LogMessage   string
 }
 
+var confpath = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog4switches.conf.toml").String()
+
 func main() {
-	var (
-		confPath = "syslog4switches.conf.json"
-		err      error
-	)
+	kingpin.Parse()
 
-	confdata, err := ioutil.ReadFile(confPath)
-	if err != nil {
-		log.Fatalf("Error reading config file: %s", err)
+	if _, err := toml.DecodeFile(*confpath, &config); err != nil {
+		log.Fatalf("Error decoding config file from %s", *confpath)
 	}
 
-	err = json.Unmarshal(confdata, &config)
-	if err != nil {
-		log.Fatalf("Error unmarshalling config file: %s", err)
-	}
-
-	_, network, err := net.ParseCIDR(config.IPNet)
-	if err != nil {
-		log.Fatalf("Error parsing network's IP %s: %s", config.IPNet, err)
-	}
-
-	dbConf := mysql.NewConfig()
-
-	dbConf.Net = "tcp"
-	dbConf.Addr = config.DBNetmapHost
-	dbConf.DBName = config.DBNetmapName
-	dbConf.User = config.DBNetmapUser
-	dbConf.Passwd = config.DBNetmapPass
-	dbConf.ParseTime = true
-
-	dbNetmap, err := sqlx.Open("mysql", dbConf.FormatDSN())
-	if err != nil {
-		log.Fatalf("Error connecting to netmap database: %s", err)
-	}
-	defer dbNetmap.Close()
-
-	conn, err := sqlx.Open("clickhouse", config.DBHost+"?username="+config.DBUser+"&password="+config.DBPassword+"&database="+config.DBName)
+	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", config.DB.Host, config.DB.User, config.DB.Pass, config.DB.Name))
 	if err != nil {
 		log.Fatalf("Error connecting to database: %s", err)
 	}
-	defer conn.Close()
+	defer db.Close()
 
 	loc, err := time.LoadLocation("Europe/Saratov")
 	if err != nil {
