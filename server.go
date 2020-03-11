@@ -1,24 +1,25 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	_ "github.com/ClickHouse/clickhouse-go"
 	"github.com/jmoiron/sqlx"
+	"github.com/soniah/gosnmp"
+	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
 var config struct {
-	Port string `toml:"listen_port"`
-	DB   db     `toml:"db"`
+	Port    string `toml:"listen_port"`
+	Network string `toml:"switch_network"`
+	DB      db     `toml:"db"`
 }
 
 type db struct {
@@ -43,6 +44,25 @@ var confpath = kingpin.Flag("conf", "Path to config file.").Short('c').Default("
 func main() {
 	kingpin.Parse()
 
+	// Syslog server creating.
+	channel := make(syslog.LogPartsChannel, 1000)
+	handler := syslog.NewChannelHandler(channel)
+
+	server := syslog.NewServer()
+	server.SetFormat(syslog.Automatic)
+	server.SetHandler(handler)
+
+	err := server.ListenUDP(":514")
+	if err != nil {
+		log.Fatalf("Error configuring server for UDP listen: %s", err)
+	}
+
+	err = server.Boot()
+	if err != nil {
+		log.Fatalf("Error starting server: %s", err)
+	}
+
+	// Connecting to ClickHouse.
 	if _, err := toml.DecodeFile(*confpath, &config); err != nil {
 		log.Fatalf("Error decoding config file from %s", *confpath)
 	}
@@ -53,56 +73,36 @@ func main() {
 	}
 	defer db.Close()
 
+	// Loading some useful data.
 	loc, err := time.LoadLocation("Europe/Saratov")
 	if err != nil {
 		log.Fatalf("Error getting time zone: %s", err)
 	}
 
-	channel := make(syslog.LogPartsChannel, 1000)
-	handler := syslog.NewChannelHandler(channel)
-
-	server := syslog.NewServer()
-	server.SetFormat(syslog.Automatic)
-	server.SetHandler(handler)
-
-	err = server.ListenUnixgram(":514")
+	_, network, err := net.ParseCIDR(config.Network)
 	if err != nil {
-		log.Fatalf("Error configuring server for UDP listen: %s", err)
+		log.Fatalf("Error parsing switch network: %s", err)
 	}
 
-	err = server.Boot()
-	if err != nil {
-		log.Fatalf("Error starting server: %s", err)
-	}
-
-	swMap := make(map[string]string)
-
-	go func(db *sqlx.DB) {
-		swMap, err = makeSwitchMap(db)
-		if err != nil {
-			log.Printf("Error making map[ip]name: %s", err)
-		}
-		log.Printf("Map of ip's and names maked!")
-
-		for range time.Tick(time.Minute * 30) {
-			swMap, err = makeSwitchMap(db)
-			if err != nil {
-				log.Printf("Error making map[ip]name: %s", err)
-			}
-			log.Printf("Map of ip's and names updated!")
-		}
-	}(dbNetmap)
+	const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7"
+	const query = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
+	IPNameMap := make(map[string]string)
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
-			if l, err := parseLog(logmap, network, swMap); err == nil {
-				tx, err := conn.Begin()
+			if l, err := parseLog(logmap, network, entPhysicalName, IPNameMap); err == nil {
+				if l.SwName == "no name" {
+					log.Printf("Can't get name for %s switch", l.SwIP)
+				}
+				IPNameMap[l.SwIP] = l.SwName
+
+				tx, err := db.Begin()
 				if err != nil {
 					log.Printf("Error starting transaction: %s", err)
 					continue
 				}
 
-				_, err = tx.Exec("INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)", time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
+				_, err = tx.Exec(query, time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
 				if err != nil {
 					log.Printf("Error inserting log to database: %s", err)
 
@@ -123,10 +123,8 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts, network *net.IPNet, swMap map[string]string) (switchLog, error) {
-	var (
-		l switchLog
-	)
+func parseLog(logmap format.LogParts, network *net.IPNet, entPhysicalName string, IPNameMap map[string]string) (switchLog, error) {
+	var l switchLog
 
 	for key, val := range logmap {
 		switch key {
@@ -150,33 +148,32 @@ func parseLog(logmap format.LogParts, network *net.IPNet, swMap map[string]strin
 		}
 	}
 
-	l.SwName = swMap[l.SwIP]
+	if _, ok := IPNameMap[l.SwIP]; !ok {
+		sw := gosnmp.Default
 
-	return l, nil
-}
+		sw.Target = l.SwIP
+		sw.Retries = 2
 
-func makeSwitchMap(db *sqlx.DB) (map[string]string, error) {
-	var (
-		swMap    = make(map[string]string)
-		switches []netmapSwitch
-	)
+		if err := sw.Connect(); err != nil {
+			l.SwName = "no name"
+		}
+		defer sw.Conn.Close()
 
-	err := db.Select(&switches, "SELECT name, ip FROM unetmap_host WHERE ip IS NOT NULL AND type_id = 4")
-	if err != nil {
-		return nil, err
-	}
-
-	for _, sw := range switches {
-		intIP, err := strconv.Atoi(sw.IP)
+		oids := []string{entPhysicalName}
+		result, err := sw.Get(oids)
 		if err != nil {
-			log.Printf("Error converting string IP to int IP: %s", err)
-			return swMap, err
+			l.SwName = "no name"
 		}
 
-		realIP := fmt.Sprintf("%d.%d.%d.%d", byte(intIP>>24), byte(intIP>>16), byte(intIP>>8), byte(intIP))
-
-		swMap[realIP] = sw.Name
+		for _, v := range result.Variables {
+			switch v.Name {
+			case entPhysicalName:
+				l.SwName = string(v.Value.([]byte))
+			default:
+				l.SwIP = "no name"
+			}
+		}
 	}
 
-	return swMap, nil
+	return l, nil
 }
