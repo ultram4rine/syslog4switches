@@ -44,25 +44,6 @@ var confpath = kingpin.Flag("conf", "Path to config file.").Short('c').Default("
 func main() {
 	kingpin.Parse()
 
-	// Syslog server creating.
-	channel := make(syslog.LogPartsChannel, 1000)
-	handler := syslog.NewChannelHandler(channel)
-
-	server := syslog.NewServer()
-	server.SetFormat(syslog.Automatic)
-	server.SetHandler(handler)
-
-	err := server.ListenUDP(":514")
-	if err != nil {
-		log.Fatalf("Error configuring server for UDP listen: %s", err)
-	}
-
-	err = server.Boot()
-	if err != nil {
-		log.Fatalf("Error starting server: %s", err)
-	}
-
-	// Connecting to ClickHouse.
 	if _, err := toml.DecodeFile(*confpath, &config); err != nil {
 		log.Fatalf("Error decoding config file from %s", *confpath)
 	}
@@ -73,7 +54,21 @@ func main() {
 	}
 	defer db.Close()
 
-	// Loading some useful data.
+	channel := make(syslog.LogPartsChannel, 1000)
+	handler := syslog.NewChannelHandler(channel)
+
+	server := syslog.NewServer()
+	server.SetFormat(syslog.Automatic)
+	server.SetHandler(handler)
+
+	if err = server.ListenUDP(":514"); err != nil {
+		log.Fatalf("Error configuring server for UDP listen: %s", err)
+	}
+
+	if err = server.Boot(); err != nil {
+		log.Fatalf("Error starting server: %s", err)
+	}
+
 	loc, err := time.LoadLocation("Europe/Saratov")
 	if err != nil {
 		log.Fatalf("Error getting time zone: %s", err)
@@ -84,9 +79,11 @@ func main() {
 		log.Fatalf("Error parsing switch network: %s", err)
 	}
 
-	const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7"
-	const query = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
-	IPNameMap := make(map[string]string)
+	const (
+		entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7"
+		query           = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
+	)
+	var IPNameMap = make(map[string]string)
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
