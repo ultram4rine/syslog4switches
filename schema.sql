@@ -9,5 +9,4 @@ CREATE TABLE IF NOT EXISTS logs.switchlogs (
   `priority` UInt8,
   `log_msg` String
 ) ENGINE = MergeTree() PARTITION BY toYYYYMMDD(ts_local)
-ORDER BY
-  ts_local
+ORDER BY ts_local
