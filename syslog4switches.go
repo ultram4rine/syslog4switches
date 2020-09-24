@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/BurntSushi/toml"
 	_ "github.com/ClickHouse/clickhouse-go"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 	"github.com/soniah/gosnmp"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/mcuadros/go-syslog.v2"
@@ -45,7 +45,7 @@ func main() {
 	kingpin.Parse()
 
 	if _, err := toml.DecodeFile(*confpath, &config); err != nil {
-		log.Fatalf("Error decoding config file from %s", *confpath)
+		log.Fatalf("Error decoding config file from %s: %s", *confpath, err)
 	}
 
 	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", config.DB.Host, config.DB.User, config.DB.Pass, config.DB.Name))
