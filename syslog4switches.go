@@ -88,7 +88,7 @@ func main() {
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
 			if l, err := parseLog(logmap, network, entPhysicalName, IPNameMap); err != nil {
-				log.Infof("Failed to parse log")
+				log.Infof("Failed to parse log: %s", err)
 			} else {
 				if l.SwName == "no name" {
 					log.Printf("Can't get name for %s switch", l.SwIP)
