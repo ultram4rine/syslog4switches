@@ -17,7 +17,6 @@ import (
 )
 
 var config struct {
-	Port    string `toml:"listen_port"`
 	Network string `toml:"switch_network"`
 	DB      db     `toml:"db"`
 }
