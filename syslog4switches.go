@@ -78,15 +78,13 @@ func main() {
 		log.Fatalf("Error parsing switch network: %s", err)
 	}
 
-	const (
-		entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7.1"
-		query           = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
-	)
+	const query = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
+
 	var IPNameMap = make(map[string]string)
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
-			if l, err := parseLog(logmap, network, entPhysicalName, IPNameMap); err != nil {
+			if l, err := parseLog(logmap, network, IPNameMap); err != nil {
 				log.Infof("Failed to parse log: %s", err)
 			} else {
 				if l.SwName == "no name" {
@@ -122,7 +120,9 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts, network *net.IPNet, entPhysicalName string, IPNameMap map[string]string) (switchLog, error) {
+func parseLog(logmap format.LogParts, network *net.IPNet, IPNameMap map[string]string) (switchLog, error) {
+	const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7.1"
+
 	var l switchLog
 
 	for key, val := range logmap {
