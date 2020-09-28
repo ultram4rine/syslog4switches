@@ -133,7 +133,7 @@ func parseLog(logmap format.LogParts, network *net.IPNet, IPNameMap map[string]s
 			{
 				l.SwIP = strings.Split(val.(string), ":")[0]
 				if !network.Contains(net.ParseIP(l.SwIP)) {
-					return l, fmt.Errorf("ip not in switch network")
+					return l, fmt.Errorf("ip %s not in switch network", l.SwIP)
 				}
 			}
 		case "timestamp":
