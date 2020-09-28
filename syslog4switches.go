@@ -92,8 +92,9 @@ func main() {
 			} else {
 				if l.SwName == "no name" {
 					log.Printf("Can't get name for %s switch", l.SwIP)
+				} else {
+					IPNameMap[l.SwIP] = l.SwName
 				}
-				IPNameMap[l.SwIP] = l.SwName
 
 				tx, err := db.Begin()
 				if err != nil {
@@ -147,7 +148,7 @@ func parseLog(logmap format.LogParts, network *net.IPNet, entPhysicalName string
 		}
 	}
 
-	if _, ok := IPNameMap[l.SwIP]; !ok {
+	if name, ok := IPNameMap[l.SwIP]; !ok {
 		sw := gosnmp.Default
 
 		sw.Target = l.SwIP
@@ -169,9 +170,11 @@ func parseLog(logmap format.LogParts, network *net.IPNet, entPhysicalName string
 			case entPhysicalName:
 				l.SwName = string(v.Value.([]byte))
 			default:
-				l.SwIP = "no name"
+				l.SwName = "no name"
 			}
 		}
+	} else {
+		l.SwName = name
 	}
 
 	return l, nil
