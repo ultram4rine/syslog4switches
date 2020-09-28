@@ -17,11 +17,6 @@ import (
 )
 
 var config struct {
-	Network string
-	DB      db
-}
-
-type db struct {
 	Host string
 	Name string
 	User string
@@ -67,19 +62,16 @@ func main() {
 		log.Warn("Failed to bind db_pass ENV variable")
 	}
 
-	if config.Network = viper.GetString("switch_network"); config.Network == "" {
-		log.Fatalf("Empty switch network")
-	}
-	if config.DB.Host = viper.GetString("db_host"); config.DB.Host == "" {
+	if config.Host = viper.GetString("db_host"); config.Host == "" {
 		log.Fatalf("Empty DB host")
 	}
-	if config.DB.Name = viper.GetString("db_name"); config.DB.Name == "" {
+	if config.Name = viper.GetString("db_name"); config.Name == "" {
 		log.Fatalf("Empty DB name")
 	}
-	config.DB.User = viper.GetString("db_user")
-	config.DB.Pass = viper.GetString("db_pass")
+	config.User = viper.GetString("db_user")
+	config.Pass = viper.GetString("db_pass")
 
-	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", config.DB.Host, config.DB.User, config.DB.Pass, config.DB.Name))
+	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", config.Host, config.User, config.Pass, config.Name))
 	if err != nil {
 		log.Fatalf("Error connecting to database: %s", err)
 	}
@@ -105,18 +97,13 @@ func main() {
 		log.Fatalf("Error getting time zone: %s", err)
 	}
 
-	_, network, err := net.ParseCIDR(config.Network)
-	if err != nil {
-		log.Fatalf("Error parsing switch network: %s", err)
-	}
-
 	const query = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
 
 	var IPNameMap = make(map[string]string)
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
-			if l, err := parseLog(logmap, network, IPNameMap); err != nil {
+			if l, err := parseLog(logmap, IPNameMap); err != nil {
 				log.Infof("Failed to parse log: %s", err)
 			} else {
 				if l.SwName == "no name" {
@@ -152,7 +139,7 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts, network *net.IPNet, IPNameMap map[string]string) (switchLog, error) {
+func parseLog(logmap format.LogParts, IPNameMap map[string]string) (switchLog, error) {
 	const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7.1"
 
 	var l switchLog
@@ -162,12 +149,7 @@ func parseLog(logmap format.LogParts, network *net.IPNet, IPNameMap map[string]s
 		case "content":
 			l.LogMessage = val.(string)
 		case "client":
-			{
-				l.SwIP = strings.Split(val.(string), ":")[0]
-				if !network.Contains(net.ParseIP(l.SwIP)) {
-					return l, fmt.Errorf("ip %s not in switch network", l.SwIP)
-				}
-			}
+			l.SwIP = strings.Split(val.(string), ":")[0]
 		case "timestamp":
 			l.LogTimeStamp = val.(time.Time)
 		case "facility":
