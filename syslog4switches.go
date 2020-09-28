@@ -79,7 +79,7 @@ func main() {
 	}
 
 	const (
-		entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7"
+		entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7.1"
 		query           = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
 	)
 	var IPNameMap = make(map[string]string)
