@@ -10,6 +10,7 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/sirupsen/logrus v1.6.0
 	github.com/soniah/gosnmp v1.27.0
+	github.com/spf13/viper v1.7.1
 	google.golang.org/appengine v1.6.6 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/mcuadros/go-syslog.v2 v2.3.0
