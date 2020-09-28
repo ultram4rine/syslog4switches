@@ -54,30 +54,30 @@ func main() {
 	if err := viper.BindEnv("switch_network"); err != nil {
 		log.Warn("Failed to bind switch_network ENV variable")
 	}
-	if err := viper.BindEnv("db.host"); err != nil {
-		log.Warn("Failed to bind db.host ENV variable")
+	if err := viper.BindEnv("db_host"); err != nil {
+		log.Warn("Failed to bind db_host ENV variable")
 	}
-	if err := viper.BindEnv("db.name"); err != nil {
-		log.Warn("Failed to bind db.name ENV variable")
+	if err := viper.BindEnv("db_name"); err != nil {
+		log.Warn("Failed to bind db_name ENV variable")
 	}
-	if err := viper.BindEnv("db.user"); err != nil {
-		log.Warn("Failed to bind db.user ENV variable")
+	if err := viper.BindEnv("db_user"); err != nil {
+		log.Warn("Failed to bind db_user ENV variable")
 	}
-	if err := viper.BindEnv("db.pass"); err != nil {
-		log.Warn("Failed to bind db.pass ENV variable")
+	if err := viper.BindEnv("db_pass"); err != nil {
+		log.Warn("Failed to bind db_pass ENV variable")
 	}
 
 	if config.Network = viper.GetString("switch_network"); config.Network == "" {
 		log.Fatalf("Empty switch network")
 	}
-	if config.DB.Host = viper.GetString("db.host"); config.DB.Host == "" {
+	if config.DB.Host = viper.GetString("db_host"); config.DB.Host == "" {
 		log.Fatalf("Empty DB host")
 	}
-	if config.DB.Name = viper.GetString("db.name"); config.DB.Name == "" {
+	if config.DB.Name = viper.GetString("db_name"); config.DB.Name == "" {
 		log.Fatalf("Empty DB name")
 	}
-	config.DB.User = viper.GetString("db.user")
-	config.DB.Pass = viper.GetString("db.pass")
+	config.DB.User = viper.GetString("db_user")
+	config.DB.Pass = viper.GetString("db_pass")
 
 	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", config.DB.Host, config.DB.User, config.DB.Pass, config.DB.Name))
 	if err != nil {
