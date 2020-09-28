@@ -6,26 +6,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	_ "github.com/ClickHouse/clickhouse-go"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"github.com/soniah/gosnmp"
+	"github.com/spf13/viper"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
 var config struct {
-	Network string `toml:"switch_network"`
-	DB      db     `toml:"db"`
+	Network string
+	DB      db
 }
 
 type db struct {
-	Host string `toml:"host"`
-	Name string `toml:"name"`
-	User string `toml:"user"`
-	Pass string `toml:"pass"`
+	Host string
+	Name string
+	User string
+	Pass string
 }
 
 type switchLog struct {
@@ -38,14 +38,46 @@ type switchLog struct {
 	LogMessage   string
 }
 
-var confpath = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog4switches.conf.toml").String()
+var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog4switches.conf").String()
 
 func main() {
 	kingpin.Parse()
 
-	if _, err := toml.DecodeFile(*confpath, &config); err != nil {
-		log.Fatalf("Error decoding config file from %s: %s", *confpath, err)
+	viper.SetConfigName(*confname)
+	viper.AddConfigPath("/etc/syslog4switches/")
+	viper.AddConfigPath(".")
+	if err := viper.ReadInConfig(); err != nil {
+		log.Warnf("Error decoding config file from %s: %s", *confname, err)
 	}
+
+	viper.SetEnvPrefix("s4s")
+	if err := viper.BindEnv("switch_network"); err != nil {
+		log.Warn("Failed to bind switch_network ENV variable")
+	}
+	if err := viper.BindEnv("db.host"); err != nil {
+		log.Warn("Failed to bind db.host ENV variable")
+	}
+	if err := viper.BindEnv("db.name"); err != nil {
+		log.Warn("Failed to bind db.name ENV variable")
+	}
+	if err := viper.BindEnv("db.user"); err != nil {
+		log.Warn("Failed to bind db.user ENV variable")
+	}
+	if err := viper.BindEnv("db.pass"); err != nil {
+		log.Warn("Failed to bind db.pass ENV variable")
+	}
+
+	if config.Network = viper.GetString("switch_network"); config.Network == "" {
+		log.Fatalf("Empty switch network")
+	}
+	if config.DB.Host = viper.GetString("db.host"); config.DB.Host == "" {
+		log.Fatalf("Empty DB host")
+	}
+	if config.DB.Name = viper.GetString("db.name"); config.DB.Name == "" {
+		log.Fatalf("Empty DB name")
+	}
+	config.DB.User = viper.GetString("db.user")
+	config.DB.Pass = viper.GetString("db.pass")
 
 	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", config.DB.Host, config.DB.User, config.DB.Pass, config.DB.Name))
 	if err != nil {
