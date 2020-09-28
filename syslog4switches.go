@@ -167,7 +167,7 @@ func parseLog(logmap format.LogParts, network *net.IPNet, IPNameMap map[string]s
 		for _, v := range result.Variables {
 			switch v.Name {
 			case entPhysicalName:
-				l.SwName = string(v.Value.([]byte))
+				l.SwName = v.Value.(string)
 			default:
 				l.SwName = "no name"
 			}
