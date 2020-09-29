@@ -95,6 +95,8 @@ func main() {
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
+			log.Infof("Received log from %v", logmap["client"])
+
 			if l, err := parseLog(logmap, IPNameMap); err != nil {
 				log.Infof("Failed to parse log: %s", err)
 			} else {
