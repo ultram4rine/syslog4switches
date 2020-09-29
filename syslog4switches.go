@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -62,16 +63,7 @@ func main() {
 		log.Warn("Failed to bind db_pass ENV variable")
 	}
 
-	if config.Host = viper.GetString("db_host"); config.Host == "" {
-		log.Fatalf("Empty DB host")
-	}
-	if config.Name = viper.GetString("db_name"); config.Name == "" {
-		log.Fatalf("Empty DB name")
-	}
-	config.User = viper.GetString("db_user")
-	config.Pass = viper.GetString("db_pass")
-
-	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", config.Host, config.User, config.Pass, config.Name))
+	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", viper.GetString("db_host"), viper.GetString("db_user"), viper.GetString("db_pass"), viper.GetString("db_name")))
 	if err != nil {
 		log.Fatalf("Error connecting to database: %s", err)
 	}
@@ -106,30 +98,26 @@ func main() {
 			if l, err := parseLog(logmap, IPNameMap); err != nil {
 				log.Infof("Failed to parse log: %s", err)
 			} else {
-				if l.SwName == "no name" {
-					log.Printf("Can't get name for %s switch", l.SwIP)
-				} else {
-					IPNameMap[l.SwIP] = l.SwName
-				}
+				IPNameMap[l.SwIP] = l.SwName
 
 				tx, err := db.Begin()
 				if err != nil {
-					log.Printf("Error starting transaction: %s", err)
+					log.Warnf("Error starting transaction: %s", err)
 					continue
 				}
 
 				_, err = tx.Exec(query, time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
 				if err != nil {
-					log.Printf("Error inserting log to database: %s", err)
+					log.Warnf("Error inserting log to database: %s", err)
 
 					err = tx.Rollback()
 					if err != nil {
-						log.Printf("Error aborting transaction: %s", err)
+						log.Warnf("Error aborting transaction: %s", err)
 					}
 				} else {
 					err = tx.Commit()
 					if err != nil {
-						log.Printf("Error commiting transaction: %s", err)
+						log.Warnf("Error commiting transaction: %s", err)
 					}
 				}
 			}
@@ -139,11 +127,7 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts, IPNameMap map[string]string) (switchLog, error) {
-	const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7.1"
-
-	var l switchLog
-
+func parseLog(logmap format.LogParts, IPNameMap map[string]string) (l switchLog, err error) {
 	for key, val := range logmap {
 		switch key {
 		case "content":
@@ -162,33 +146,43 @@ func parseLog(logmap format.LogParts, IPNameMap map[string]string) (switchLog, e
 	}
 
 	if name, ok := IPNameMap[l.SwIP]; !ok {
-		sw := gosnmp.Default
-
-		sw.Target = l.SwIP
-		sw.Retries = 2
-
-		if err := sw.Connect(); err != nil {
-			l.SwName = "no name"
-		}
-		defer sw.Conn.Close()
-
-		oids := []string{entPhysicalName}
-		result, err := sw.Get(oids)
+		l.SwName, err = getSwitchName(l.SwIP)
 		if err != nil {
-			l.SwName = "no name"
-		}
-
-		for _, v := range result.Variables {
-			switch v.Name {
-			case entPhysicalName:
-				l.SwName = v.Value.(string)
-			default:
-				l.SwName = "no name"
-			}
+			return switchLog{}, err
 		}
 	} else {
 		l.SwName = name
 	}
 
 	return l, nil
+}
+
+func getSwitchName(ip string) (name string, err error) {
+	const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7.1"
+
+	sw := gosnmp.Default
+	sw.Target = ip
+	sw.Retries = 2
+
+	if err := sw.Connect(); err != nil {
+		return "", err
+	}
+	defer sw.Conn.Close()
+
+	oids := []string{entPhysicalName}
+	result, err := sw.Get(oids)
+	if err != nil {
+		return "", err
+	}
+
+	for _, v := range result.Variables {
+		switch v.Name {
+		case entPhysicalName:
+			name = v.Value.(string)
+		default:
+			return "", errors.New("something went wrong :(")
+		}
+	}
+
+	return name, nil
 }
