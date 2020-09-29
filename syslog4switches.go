@@ -158,7 +158,7 @@ func parseLog(logmap format.LogParts, IPNameMap map[string]string) (l switchLog,
 }
 
 func getSwitchName(ip string) (name string, err error) {
-	const entPhysicalName = ".1.3.6.1.2.1.47.1.1.1.1.7.1"
+	const sysName = ".1.3.6.1.2.1.1.5.0"
 
 	sw := gosnmp.Default
 	sw.Target = ip
@@ -169,7 +169,7 @@ func getSwitchName(ip string) (name string, err error) {
 	}
 	defer sw.Conn.Close()
 
-	oids := []string{entPhysicalName}
+	oids := []string{sysName}
 	result, err := sw.Get(oids)
 	if err != nil {
 		return "", err
@@ -177,7 +177,7 @@ func getSwitchName(ip string) (name string, err error) {
 
 	for _, v := range result.Variables {
 		switch v.Name {
-		case entPhysicalName:
+		case sysName:
 			name = v.Value.(string)
 		default:
 			return "", errors.New("something went wrong :(")
