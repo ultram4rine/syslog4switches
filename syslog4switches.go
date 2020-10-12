@@ -7,31 +7,23 @@ import (
 	"strings"
 	"time"
 
+	"git.sgu.ru/ultramarine/syslog4switches/conf"
 	_ "github.com/ClickHouse/clickhouse-go"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"github.com/soniah/gosnmp"
-	"github.com/spf13/viper"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/mcuadros/go-syslog.v2"
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
-var config struct {
-	Host string
-	Name string
-	User string
-	Pass string
-}
-
 type switchLog struct {
-	SwName       string
-	SwIP         string
-	LogTimeStamp time.Time
-	LogFacility  uint8
-	LogSeverity  uint8
-	LogPriority  uint8
-	LogMessage   string
+	IP        string
+	TimeStamp time.Time
+	Facility  uint8
+	Severity  uint8
+	Priority  uint8
+	Message   string
 }
 
 var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog4switches.conf").String()
@@ -39,31 +31,11 @@ var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("
 func main() {
 	kingpin.Parse()
 
-	viper.SetConfigName(*confname)
-	viper.AddConfigPath("/etc/syslog4switches/")
-	viper.AddConfigPath(".")
-	if err := viper.ReadInConfig(); err != nil {
-		log.Warnf("Error decoding config file from %s: %s", *confname, err)
+	if err := conf.Load(*confname); err != nil {
+		log.Fatalf("Failed to load configuration: %s", err)
 	}
 
-	viper.SetEnvPrefix("s4s")
-	if err := viper.BindEnv("switch_network"); err != nil {
-		log.Warn("Failed to bind switch_network ENV variable")
-	}
-	if err := viper.BindEnv("db_host"); err != nil {
-		log.Warn("Failed to bind db_host ENV variable")
-	}
-	if err := viper.BindEnv("db_name"); err != nil {
-		log.Warn("Failed to bind db_name ENV variable")
-	}
-	if err := viper.BindEnv("db_user"); err != nil {
-		log.Warn("Failed to bind db_user ENV variable")
-	}
-	if err := viper.BindEnv("db_pass"); err != nil {
-		log.Warn("Failed to bind db_pass ENV variable")
-	}
-
-	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", viper.GetString("db_host"), viper.GetString("db_user"), viper.GetString("db_pass"), viper.GetString("db_name")))
+	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
 	if err != nil {
 		log.Fatalf("Error connecting to database: %s", err)
 	}
@@ -97,10 +69,10 @@ func main() {
 		for logmap := range channel {
 			log.Infof("Received log from %v", logmap["client"])
 
-			if l, err := parseLog(logmap, IPNameMap); err != nil {
+			if name, l, err := parseLog(logmap, IPNameMap); err != nil {
 				log.Infof("Failed to parse log: %s", err)
 			} else {
-				IPNameMap[l.SwIP] = l.SwName
+				IPNameMap[l.IP] = name
 
 				tx, err := db.Begin()
 				if err != nil {
@@ -108,7 +80,7 @@ func main() {
 					continue
 				}
 
-				_, err = tx.Exec(query, time.Now().In(loc), l.SwName, net.ParseIP(l.SwIP), l.LogTimeStamp, l.LogFacility, l.LogSeverity, l.LogPriority, l.LogMessage)
+				_, err = tx.Exec(query, time.Now().In(loc), name, net.ParseIP(l.IP), l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message)
 				if err != nil {
 					log.Warnf("Error inserting log to database: %s", err)
 
@@ -129,34 +101,33 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts, IPNameMap map[string]string) (l switchLog, err error) {
+func parseLog(logmap format.LogParts, IPNameMap map[string]string) (name string, l switchLog, err error) {
 	for key, val := range logmap {
 		switch key {
 		case "content":
-			l.LogMessage = val.(string)
+			l.Message = val.(string)
 		case "client":
-			l.SwIP = strings.Split(val.(string), ":")[0]
+			l.IP = strings.Split(val.(string), ":")[0]
 		case "timestamp":
-			l.LogTimeStamp = val.(time.Time)
+			l.TimeStamp = val.(time.Time)
 		case "facility":
-			l.LogFacility = uint8(val.(int))
+			l.Facility = uint8(val.(int))
 		case "severity":
-			l.LogSeverity = uint8(val.(int))
+			l.Severity = uint8(val.(int))
 		case "priority":
-			l.LogPriority = uint8(val.(int))
+			l.Priority = uint8(val.(int))
 		}
 	}
 
-	if name, ok := IPNameMap[l.SwIP]; !ok {
-		l.SwName, err = getSwitchName(l.SwIP)
+	var ok bool
+	if name, ok = IPNameMap[l.IP]; !ok {
+		name, err = getSwitchName(l.IP)
 		if err != nil {
-			return switchLog{}, err
+			return "", switchLog{}, err
 		}
-	} else {
-		l.SwName = name
 	}
 
-	return l, nil
+	return name, l, nil
 }
 
 func getSwitchName(ip string) (name string, err error) {
