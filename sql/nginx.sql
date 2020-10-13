@@ -5,6 +5,6 @@ CREATE TABLE IF NOT EXISTS logs.nginx (
     `facility` UInt8,
     `severity` UInt8,
     `priority` UInt8,
-    `content` String
+    `message` String
 ) ENGINE = MergeTree() PARTITION BY toYYYYMMDD(timestamp)
 ORDER BY timestamp
