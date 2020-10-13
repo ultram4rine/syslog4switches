@@ -26,6 +26,15 @@ type switchLog struct {
 	Message   string
 }
 
+type nginxLog struct {
+	Hostname  string
+	TimeStamp time.Time
+	Facility  uint8
+	Severity  uint8
+	Priority  uint8
+	Message   string
+}
+
 var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog4switches.conf").String()
 
 func main() {
@@ -61,7 +70,10 @@ func main() {
 		log.Fatalf("Error getting time zone: %s", err)
 	}
 
-	const query = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
+	const (
+		switchQuery = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
+		nginxQuery  = "INSERT INTO nginx (hostname, timestamp, facility, severity, priority, message) VALUES (?, ?, ?, ?, ?, ?)"
+	)
 
 	var IPNameMap = make(map[string]string)
 
@@ -69,29 +81,59 @@ func main() {
 		for logmap := range channel {
 			log.Infof("Received log from %v", logmap["client"])
 
-			if name, l, err := parseLog(logmap, IPNameMap); err != nil {
-				log.Infof("Failed to parse log: %s", err)
-			} else {
-				IPNameMap[l.IP] = name
+			switch logmap["tag"] {
+			case "nginx":
+				{
+					l := parseNginxLog(logmap)
 
-				tx, err := db.Begin()
-				if err != nil {
-					log.Warnf("Error starting transaction: %s", err)
-					continue
-				}
-
-				_, err = tx.Exec(query, time.Now().In(loc), name, net.ParseIP(l.IP), l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message)
-				if err != nil {
-					log.Warnf("Error inserting log to database: %s", err)
-
-					err = tx.Rollback()
+					tx, err := db.Begin()
 					if err != nil {
-						log.Warnf("Error aborting transaction: %s", err)
+						log.Warnf("Error starting transaction: %s", err)
+						continue
 					}
-				} else {
-					err = tx.Commit()
+
+					_, err = tx.Exec(nginxQuery, l.Hostname, l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message)
 					if err != nil {
-						log.Warnf("Error commiting transaction: %s", err)
+						log.Warnf("Error inserting nginx log to database: %s", err)
+
+						err = tx.Rollback()
+						if err != nil {
+							log.Warnf("Error aborting transaction: %s", err)
+						}
+					} else {
+						err = tx.Commit()
+						if err != nil {
+							log.Warnf("Error commiting transaction: %s", err)
+						}
+					}
+				}
+			case "":
+				{
+					if name, l, err := parseSwitchLog(logmap, IPNameMap); err != nil {
+						log.Warnf("Failed to parse switch log: %s", err)
+					} else {
+						IPNameMap[l.IP] = name
+
+						tx, err := db.Begin()
+						if err != nil {
+							log.Warnf("Error starting transaction: %s", err)
+							continue
+						}
+
+						_, err = tx.Exec(switchQuery, time.Now().In(loc), name, net.ParseIP(l.IP), l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message)
+						if err != nil {
+							log.Warnf("Error inserting switch log to database: %s", err)
+
+							err = tx.Rollback()
+							if err != nil {
+								log.Warnf("Error aborting transaction: %s", err)
+							}
+						} else {
+							err = tx.Commit()
+							if err != nil {
+								log.Warnf("Error commiting transaction: %s", err)
+							}
+						}
 					}
 				}
 			}
@@ -101,7 +143,32 @@ func main() {
 	server.Wait()
 }
 
-func parseLog(logmap format.LogParts, IPNameMap map[string]string) (name string, l switchLog, err error) {
+func parseNginxLog(logmap format.LogParts) nginxLog {
+	var l nginxLog
+
+	for key, val := range logmap {
+		switch key {
+		case "content":
+			l.Message = val.(string)
+		case "hostname":
+			l.Hostname = val.(string)
+		case "timestamp":
+			l.TimeStamp = val.(time.Time)
+		case "facility":
+			l.Facility = uint8(val.(int))
+		case "severity":
+			l.Severity = uint8(val.(int))
+		case "priority":
+			l.Priority = uint8(val.(int))
+		}
+	}
+
+	return l
+}
+
+func parseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (string, switchLog, error) {
+	var l switchLog
+
 	for key, val := range logmap {
 		switch key {
 		case "content":
@@ -119,8 +186,9 @@ func parseLog(logmap format.LogParts, IPNameMap map[string]string) (name string,
 		}
 	}
 
-	var ok bool
-	if name, ok = IPNameMap[l.IP]; !ok {
+	name, ok := IPNameMap[l.IP]
+	if !ok {
+		var err error
 		name, err = getSwitchName(l.IP)
 		if err != nil {
 			return "", switchLog{}, err
