@@ -35,6 +35,12 @@ type nginxLog struct {
 	Message   string
 }
 
+type postfixLog struct {
+	Daemon    string
+	TimeStamp time.Time
+	Message   string
+}
+
 var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog4switches.conf").String()
 
 func main() {
@@ -71,8 +77,9 @@ func main() {
 	}
 
 	const (
-		switchQuery = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
-		nginxQuery  = "INSERT INTO nginx (hostname, timestamp, facility, severity, priority, message) VALUES (?, ?, ?, ?, ?, ?)"
+		switchQuery  = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
+		nginxQuery   = "INSERT INTO nginx (hostname, timestamp, facility, severity, priority, message) VALUES (?, ?, ?, ?, ?, ?)"
+		postfixQuery = "INSERT INTO postfix (daemon, timestamp, message) VALUES (?, ?, ?)"
 	)
 
 	var IPNameMap = make(map[string]string)
@@ -81,8 +88,8 @@ func main() {
 		for logmap := range channel {
 			log.Infof("Received log from %v", logmap["client"])
 
-			switch logmap["tag"] {
-			case "nginx":
+			switch {
+			case logmap["tag"] == "nginx":
 				{
 					l := parseNginxLog(logmap)
 
@@ -107,7 +114,31 @@ func main() {
 						}
 					}
 				}
-			case "":
+			case strings.Contains(fmt.Sprintf("%v", logmap["tag"]), "postfix/"):
+				{
+					l := parsePostfixLog(logmap)
+
+					tx, err := db.Begin()
+					if err != nil {
+						log.Warnf("Error starting transaction: %s", err)
+					}
+
+					_, err = tx.Exec(postfixQuery, l.Daemon, l.TimeStamp, l.Message)
+					if err != nil {
+						log.Warnf("Error inserting postfix log to database: %s", err)
+
+						err = tx.Rollback()
+						if err != nil {
+							log.Warnf("Error aborting transaction: %s", err)
+						}
+					} else {
+						err = tx.Commit()
+						if err != nil {
+							log.Warnf("Error commiting transaction: %s", err)
+						}
+					}
+				}
+			case logmap["tag"] == "":
 				{
 					if name, l, err := parseSwitchLog(logmap, IPNameMap); err != nil {
 						log.Warnf("Failed to parse switch log: %s", err)
@@ -141,6 +172,23 @@ func main() {
 	}(channel)
 
 	server.Wait()
+}
+
+func parsePostfixLog(logmap format.LogParts) postfixLog {
+	var l postfixLog
+
+	for k, v := range logmap {
+		switch k {
+		case "tag":
+			l.Daemon = strings.Split(fmt.Sprintf("%v", v), "/")[1]
+		case "timestamp":
+			l.TimeStamp = v.(time.Time)
+		case "content":
+			l.Message = v.(string)
+		}
+	}
+
+	return l
 }
 
 func parseNginxLog(logmap format.LogParts) nginxLog {
