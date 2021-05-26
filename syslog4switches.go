@@ -175,16 +175,36 @@ func main() {
 }
 
 func parsePostfixLog(logmap format.LogParts) postfixLog {
-	var l postfixLog
+	var (
+		l  postfixLog
+		ok bool
+	)
 
 	for k, v := range logmap {
 		switch k {
 		case "tag":
-			l.Daemon = strings.Split(fmt.Sprintf("%v", v), "/")[1]
+			{
+				tag, ok := v.(string)
+				if !ok {
+					log.Warnf("tag wrong type")
+				}
+				tagArr := strings.Split(tag, "/")
+				if len(tagArr) < 2 {
+					l.Daemon = tagArr[0]
+				} else {
+					l.Daemon = tagArr[1]
+				}
+			}
 		case "timestamp":
-			l.TimeStamp = v.(time.Time)
+			l.TimeStamp, ok = v.(time.Time)
+			if !ok {
+				log.Warnf("timestamp wrong type")
+			}
 		case "content":
-			l.Message = v.(string)
+			l.Message, ok = v.(string)
+			if !ok {
+				log.Warnf("content wrong type")
+			}
 		}
 	}
 
@@ -192,22 +212,55 @@ func parsePostfixLog(logmap format.LogParts) postfixLog {
 }
 
 func parseNginxLog(logmap format.LogParts) nginxLog {
-	var l nginxLog
+	var (
+		l  nginxLog
+		ok bool
+	)
 
 	for key, val := range logmap {
 		switch key {
 		case "content":
-			l.Message = val.(string)
+			{
+				l.Message, ok = val.(string)
+				if !ok {
+					log.Warnf("content wrong type")
+				}
+			}
 		case "hostname":
-			l.Hostname = val.(string)
+			{
+				l.Hostname, ok = val.(string)
+				if !ok {
+					log.Warnf("hostname wrong type")
+				}
+			}
 		case "timestamp":
-			l.TimeStamp = val.(time.Time)
+			{
+				l.TimeStamp, ok = val.(time.Time)
+				if !ok {
+					log.Warnf("timestamp wrong type")
+				}
+			}
 		case "facility":
-			l.Facility = uint8(val.(int))
+			{
+				l.Facility, ok = val.(uint8)
+				if !ok {
+					log.Warnf("facility wrong type")
+				}
+			}
 		case "severity":
-			l.Severity = uint8(val.(int))
+			{
+				l.Severity, ok = val.(uint8)
+				if !ok {
+					log.Warnf("severity wrong type")
+				}
+			}
 		case "priority":
-			l.Priority = uint8(val.(int))
+			{
+				l.Priority, ok = val.(uint8)
+				if !ok {
+					log.Warnf("priority wrong type")
+				}
+			}
 		}
 	}
 
@@ -215,22 +268,56 @@ func parseNginxLog(logmap format.LogParts) nginxLog {
 }
 
 func parseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (string, switchLog, error) {
-	var l switchLog
+	var (
+		l  switchLog
+		ok bool
+	)
 
 	for key, val := range logmap {
 		switch key {
 		case "content":
-			l.Message = val.(string)
+			{
+				l.Message, ok = val.(string)
+				if !ok {
+					log.Warnf("content wrong type")
+				}
+			}
 		case "client":
-			l.IP = strings.Split(val.(string), ":")[0]
+			{
+				ip, ok := val.(string)
+				if !ok {
+					log.Warnf("client wrong type")
+				}
+				l.IP = strings.Split(ip, ":")[0]
+			}
 		case "timestamp":
-			l.TimeStamp = val.(time.Time)
+			{
+				l.TimeStamp, ok = val.(time.Time)
+				if !ok {
+					log.Warnf("timestamp wrong type")
+				}
+			}
 		case "facility":
-			l.Facility = uint8(val.(int))
+			{
+				l.Facility, ok = val.(uint8)
+				if !ok {
+					log.Warnf("facility wrong type")
+				}
+			}
 		case "severity":
-			l.Severity = uint8(val.(int))
+			{
+				l.Severity, ok = val.(uint8)
+				if !ok {
+					log.Warnf("severity wrong type")
+				}
+			}
 		case "priority":
-			l.Priority = uint8(val.(int))
+			{
+				l.Priority, ok = val.(uint8)
+				if !ok {
+					log.Warnf("priority wrong type")
+				}
+			}
 		}
 	}
 
