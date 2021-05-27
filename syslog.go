@@ -28,7 +28,7 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	var ctx context.Context
+	var ctx = context.Background()
 
 	db, err := sqlx.ConnectContext(ctx, "clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
 	if err != nil {
