@@ -64,7 +64,7 @@ func SaveMailLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts) {
 		return
 	}
 
-	if !(l.Service == "dovecot" && strings.Contains(l.Message, "expunged")) {
+	if l.Service == "dovecot" && !(strings.Contains(l.Message, "expunged")) {
 		return
 	}
 
