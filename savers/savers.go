@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"git.sgu.ru/ultramarine/syslog4switches/helpers"
-	"git.sgu.ru/ultramarine/syslog4switches/parsers"
+	"git.sgu.ru/ultramarine/custom_syslog/helpers"
+	"git.sgu.ru/ultramarine/custom_syslog/parsers"
 
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"

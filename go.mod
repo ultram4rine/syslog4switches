@@ -1,4 +1,4 @@
-module git.sgu.ru/ultramarine/syslog4switches
+module git.sgu.ru/ultramarine/custom_syslog
 
 go 1.15
 

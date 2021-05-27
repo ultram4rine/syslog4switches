@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"git.sgu.ru/ultramarine/syslog4switches/conf"
-	"git.sgu.ru/ultramarine/syslog4switches/helpers"
-	"git.sgu.ru/ultramarine/syslog4switches/savers"
+	"git.sgu.ru/ultramarine/custom_syslog/conf"
+	"git.sgu.ru/ultramarine/custom_syslog/helpers"
+	"git.sgu.ru/ultramarine/custom_syslog/savers"
 	"google.golang.org/grpc"
 
 	pb "git.sgu.ru/sgu/netdataserv/netdataproto"
@@ -19,7 +19,7 @@ import (
 	"gopkg.in/mcuadros/go-syslog.v2"
 )
 
-var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog.conf").String()
+var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("csyslog.conf").String()
 
 func main() {
 	kingpin.Parse()
