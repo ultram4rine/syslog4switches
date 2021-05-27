@@ -54,7 +54,7 @@ func main() {
 	const (
 		switchQuery = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
 		nginxQuery  = "INSERT INTO nginx (hostname, timestamp, facility, severity, priority, message) VALUES (?, ?, ?, ?, ?, ?)"
-		mailQuery   = "INSERT INTO postfix (daemon, timestamp, message) VALUES (?, ?, ?)"
+		mailQuery   = "INSERT INTO mail (service, timestamp, message) VALUES (?, ?, ?)"
 	)
 
 	var IPNameMap = make(map[string]string)
