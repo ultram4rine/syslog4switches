@@ -83,7 +83,7 @@ func main() {
 			case tag == "nginx":
 				savers.SaveNginxLog(ctx, db, logmap)
 			case strings.Contains(tag, "postfix") || strings.Contains(tag, "dovecot"):
-				savers.SaveMailLog(ctx, db, logmap)
+				savers.SaveMailLog(ctx, db, logmap, loc)
 			case tag == "":
 				savers.SaveSwitchLog(ctx, db, logmap, loc, IPNameMap)
 			}

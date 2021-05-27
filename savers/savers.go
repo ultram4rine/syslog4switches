@@ -57,7 +57,7 @@ func SaveNginxLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts) {
 	}
 }
 
-func SaveMailLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts) {
+func SaveMailLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts, loc *time.Location) {
 	l, err := parsers.ParseMailLog(logmap)
 	if err != nil {
 		log.Warnf("mail: error parsing log: %v", err)
@@ -84,7 +84,8 @@ func SaveMailLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts) {
 	}
 	defer stmt.Close()
 
-	if _, err := stmt.ExecContext(ctx, l.Service, l.TimeStamp, l.Message); err != nil {
+	// Substract 4 hours because parsing time from rsyslog don't sets current timezone.
+	if _, err := stmt.ExecContext(ctx, l.Service, l.TimeStamp.In(loc).Add(-4*time.Hour), l.Message); err != nil {
 		log.Warnf("mail: error inserting log to database: %v", err)
 		if err := tx.Rollback(); err != nil {
 			log.Warnf("mail: error aborting transaction: %v", err)
