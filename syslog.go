@@ -7,8 +7,11 @@ import (
 	"time"
 
 	"git.sgu.ru/ultramarine/syslog4switches/conf"
+	"git.sgu.ru/ultramarine/syslog4switches/helpers"
 	"git.sgu.ru/ultramarine/syslog4switches/savers"
+	"google.golang.org/grpc"
 
+	pb "git.sgu.ru/sgu/netdataserv/netdataproto"
 	_ "github.com/ClickHouse/clickhouse-go"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
@@ -33,6 +36,19 @@ func main() {
 	}
 	defer db.Close()
 
+	conn, err := grpc.Dial(conf.Config.NetDataServer, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("error connecting to netdata server: %v", err)
+	}
+	defer conn.Close()
+	log.Info("connected to netdata server")
+
+	client := pb.NewNetDataClient(conn)
+	IPNameMap, err := helpers.GetSwitches(client)
+	if err != nil {
+		log.Warnf("error getting switches from netdataserv: %v", err)
+	}
+
 	channel := make(syslog.LogPartsChannel, 1000)
 	handler := syslog.NewChannelHandler(channel)
 
@@ -53,14 +69,6 @@ func main() {
 		log.Fatalf("Error getting time zone: %v", err)
 	}
 
-	const (
-		switchQuery = "INSERT INTO switchlogs (ts_local, sw_name, sw_ip, ts_remote, facility, severity, priority, log_msg) VALUES (?, ?, ?, ?, ?, ?, ?)"
-		nginxQuery  = "INSERT INTO nginx (hostname, timestamp, facility, severity, priority, message) VALUES (?, ?, ?, ?, ?, ?)"
-		mailQuery   = "INSERT INTO mail (service, timestamp, message) VALUES (?, ?, ?)"
-	)
-
-	var IPNameMap = make(map[string]string)
-
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
 			log.Infof("Received log from %v", logmap["client"])
@@ -78,9 +86,7 @@ func main() {
 			case strings.Contains(tag, "postfix") || strings.Contains(tag, "dovecot"):
 				savers.SaveMailLog(ctx, db, logmap)
 			case tag == "":
-				{
-					savers.SaveSwitchLog(ctx, db, logmap, loc, IPNameMap)
-				}
+				savers.SaveSwitchLog(ctx, db, logmap, loc, IPNameMap)
 			}
 		}
 	}(channel)

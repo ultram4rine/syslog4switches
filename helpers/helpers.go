@@ -1,12 +1,30 @@
 package helpers
 
 import (
+	"context"
 	"errors"
 
-	"github.com/soniah/gosnmp"
+	pb "git.sgu.ru/sgu/netdataserv/netdataproto"
+	"github.com/gosnmp/gosnmp"
 )
 
-func GetSwitchName(ip string) (name string, err error) {
+func GetSwitches(c pb.NetDataClient) (map[string]string, error) {
+	var ctx context.Context
+
+	switches, err := c.GetNetworkSwitches(ctx, &pb.GetNetworkSwitchesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	var IPNameMap = make(map[string]string)
+	for _, s := range switches.Switch {
+		IPNameMap[s.Ipv4Address] = s.Name
+	}
+
+	return IPNameMap, nil
+}
+
+func GetSwitchNameSNMP(ip string) (name string, err error) {
 	const sysName = ".1.3.6.1.2.1.1.5.0"
 
 	sw := gosnmp.Default
@@ -29,7 +47,7 @@ func GetSwitchName(ip string) (name string, err error) {
 		case sysName:
 			name = v.Value.(string)
 		default:
-			return "", errors.New("something went wrong :(")
+			return "", errors.New("wrong OID")
 		}
 	}
 

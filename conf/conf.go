@@ -7,10 +7,11 @@ import (
 
 // Config is the configuration.
 var Config struct {
-	DBHost string `mapstructure:"db_host"`
-	DBName string `mapstructure:"db_name"`
-	DBUser string `mapstructure:"db_user"`
-	DBPass string `mapstructure:"db_pass"`
+	DBHost        string `mapstructure:"db_host"`
+	DBName        string `mapstructure:"db_name"`
+	DBUser        string `mapstructure:"db_user"`
+	DBPass        string `mapstructure:"db_pass"`
+	NetDataServer string `mapstructure:"netdata_server"`
 }
 
 // Load parses the config from file or from ENV variables s into a Config.
@@ -32,6 +33,9 @@ func Load(confName string) error {
 		return err
 	}
 	if err := viper.BindEnv("db_pass"); err != nil {
+		return err
+	}
+	if err := viper.BindEnv("netdata_server"); err != nil {
 		return err
 	}
 
