@@ -102,8 +102,10 @@ func SaveSwitchLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts, loc
 
 	name, ok := IPNameMap[l.IP]
 	if !ok {
+		log.Infof("switch: unknown IP %s, going to find name via SNMP", l.IP)
 		name, err = helpers.GetSwitchNameSNMP(l.IP)
 		if err != nil {
+			log.Warnf("switch: error getting switch name by SNMP: %v", err)
 			return
 		}
 	}
