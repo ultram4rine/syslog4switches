@@ -1,13 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
 	"git.sgu.ru/ultramarine/syslog4switches/conf"
-	"git.sgu.ru/ultramarine/syslog4switches/parsers"
+	"git.sgu.ru/ultramarine/syslog4switches/savers"
 
 	_ "github.com/ClickHouse/clickhouse-go"
 	"github.com/jmoiron/sqlx"
@@ -22,12 +22,14 @@ func main() {
 	kingpin.Parse()
 
 	if err := conf.Load(*confname); err != nil {
-		log.Fatalf("Failed to load configuration: %s", err)
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	db, err := sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
+	var ctx context.Context
+
+	db, err := sqlx.ConnectContext(ctx, "clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
 	if err != nil {
-		log.Fatalf("Error connecting to database: %s", err)
+		log.Fatalf("Error connecting to database: %v", err)
 	}
 	defer db.Close()
 
@@ -39,16 +41,16 @@ func main() {
 	server.SetHandler(handler)
 
 	if err = server.ListenUDP(":514"); err != nil {
-		log.Fatalf("Error configuring server for UDP listen: %s", err)
+		log.Fatalf("Error configuring server for UDP listen: %v", err)
 	}
 
 	if err = server.Boot(); err != nil {
-		log.Fatalf("Error starting server: %s", err)
+		log.Fatalf("Error starting server: %v", err)
 	}
 
 	loc, err := time.LoadLocation("Europe/Saratov")
 	if err != nil {
-		log.Fatalf("Error getting time zone: %s", err)
+		log.Fatalf("Error getting time zone: %v", err)
 	}
 
 	const (
@@ -65,87 +67,19 @@ func main() {
 
 			tag, ok := logmap["tag"].(string)
 			if !ok {
-				log.Warnf("tag wrong type")
+				log.Warn("tag wrong type")
+				continue
 			}
 
 			switch {
 			case tag == "nginx":
-				{
-					l, err := parsers.ParseNginxLog(logmap)
-
-					tx, err := db.Begin()
-					if err != nil {
-						log.Warnf("Error starting transaction: %s", err)
-						continue
-					}
-
-					_, err = tx.Exec(nginxQuery, l.Hostname, l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message)
-					if err != nil {
-						log.Warnf("Error inserting nginx log to database: %s", err)
-
-						err = tx.Rollback()
-						if err != nil {
-							log.Warnf("Error aborting transaction: %s", err)
-						}
-					} else {
-						err = tx.Commit()
-						if err != nil {
-							log.Warnf("Error commiting transaction: %s", err)
-						}
-					}
-				}
+				savers.SaveNginxLog(ctx, db, logmap)
+			// TODO: dovecot `expunged`.
 			case strings.Contains(tag, "postfix") || strings.Contains(tag, "dovecot"):
-				{
-					l, err := parsers.ParseMailLog(logmap)
-
-					tx, err := db.Begin()
-					if err != nil {
-						log.Warnf("Error starting transaction: %s", err)
-					}
-
-					_, err = tx.Exec(mailQuery, l.Service, l.TimeStamp, l.Message)
-					if err != nil {
-						log.Warnf("Error inserting mail log to database: %s", err)
-
-						err = tx.Rollback()
-						if err != nil {
-							log.Warnf("Error aborting transaction: %s", err)
-						}
-					} else {
-						err = tx.Commit()
-						if err != nil {
-							log.Warnf("Error commiting transaction: %s", err)
-						}
-					}
-				}
+				savers.SaveMailLog(ctx, db, logmap)
 			case tag == "":
 				{
-					if name, l, err := parsers.ParseSwitchLog(logmap, IPNameMap); err != nil {
-						log.Warnf("Failed to parse switch log: %s", err)
-					} else {
-						IPNameMap[l.IP] = name
-
-						tx, err := db.Begin()
-						if err != nil {
-							log.Warnf("Error starting transaction: %s", err)
-							continue
-						}
-
-						_, err = tx.Exec(switchQuery, time.Now().In(loc), name, net.ParseIP(l.IP), l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message)
-						if err != nil {
-							log.Warnf("Error inserting switch log to database: %s", err)
-
-							err = tx.Rollback()
-							if err != nil {
-								log.Warnf("Error aborting transaction: %s", err)
-							}
-						} else {
-							err = tx.Commit()
-							if err != nil {
-								log.Warnf("Error commiting transaction: %s", err)
-							}
-						}
-					}
+					savers.SaveSwitchLog(ctx, db, logmap, loc, IPNameMap)
 				}
 			}
 		}

@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"git.sgu.ru/ultramarine/syslog4switches/helpers"
-
 	"gopkg.in/mcuadros/go-syslog.v2/format"
 )
 
@@ -125,7 +123,7 @@ func ParseNginxLog(logmap format.LogParts) (nginxLog, error) {
 	return l, nil
 }
 
-func ParseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (string, switchLog, error) {
+func ParseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (switchLog, error) {
 	var (
 		l  switchLog
 		ok bool
@@ -137,14 +135,14 @@ func ParseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (string
 			{
 				l.Message, ok = val.(string)
 				if !ok {
-					return "", l, errors.New("content wrong type")
+					return l, errors.New("content wrong type")
 				}
 			}
 		case "client":
 			{
 				ip, ok := val.(string)
 				if !ok {
-					return "", l, errors.New("client wrong type")
+					return l, errors.New("client wrong type")
 				}
 				l.IP = strings.Split(ip, ":")[0]
 			}
@@ -152,41 +150,32 @@ func ParseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (string
 			{
 				l.TimeStamp, ok = val.(time.Time)
 				if !ok {
-					return "", l, errors.New("timestamp wrong type")
+					return l, errors.New("timestamp wrong type")
 				}
 			}
 		case "facility":
 			{
 				l.Facility, ok = val.(uint8)
 				if !ok {
-					return "", l, errors.New("facility wrong type")
+					return l, errors.New("facility wrong type")
 				}
 			}
 		case "severity":
 			{
 				l.Severity, ok = val.(uint8)
 				if !ok {
-					return "", l, errors.New("severity wrong type")
+					return l, errors.New("severity wrong type")
 				}
 			}
 		case "priority":
 			{
 				l.Priority, ok = val.(uint8)
 				if !ok {
-					return "", l, errors.New("priority wrong type")
+					return l, errors.New("priority wrong type")
 				}
 			}
 		}
 	}
 
-	name, ok := IPNameMap[l.IP]
-	if !ok {
-		var err error
-		name, err = helpers.GetSwitchName(l.IP)
-		if err != nil {
-			return "", switchLog{}, err
-		}
-	}
-
-	return name, l, nil
+	return l, nil
 }
