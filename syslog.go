@@ -41,7 +41,7 @@ type postfixLog struct {
 	Message   string
 }
 
-var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog4switches.conf").String()
+var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("syslog.conf").String()
 
 func main() {
 	kingpin.Parse()
