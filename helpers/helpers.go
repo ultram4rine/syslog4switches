@@ -24,7 +24,7 @@ func GetSwitches(c pb.NetDataClient) (map[string]string, error) {
 	return IPNameMap, nil
 }
 
-func GetSwitchNameSNMP(ip string) (name string, err error) {
+func GetSwitchNameSNMP(ip string) (string, error) {
 	const sysName = ".1.3.6.1.2.1.1.5.0"
 
 	sw := gosnmp.Default
@@ -42,10 +42,18 @@ func GetSwitchNameSNMP(ip string) (name string, err error) {
 		return "", err
 	}
 
+	var (
+		name string
+		ok   bool
+	)
+
 	for _, v := range result.Variables {
 		switch v.Name {
 		case sysName:
-			name = v.Value.(string)
+			name, ok = v.Value.(string)
+			if !ok {
+				return "", errors.New("wrong interface type")
+			}
 		default:
 			return "", errors.New("wrong OID")
 		}
