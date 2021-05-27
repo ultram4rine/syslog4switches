@@ -82,7 +82,6 @@ func main() {
 			switch {
 			case tag == "nginx":
 				savers.SaveNginxLog(ctx, db, logmap)
-			// TODO: dovecot `expunged`.
 			case strings.Contains(tag, "postfix") || strings.Contains(tag, "dovecot"):
 				savers.SaveMailLog(ctx, db, logmap)
 			case tag == "":

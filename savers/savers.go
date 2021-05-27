@@ -3,6 +3,7 @@ package savers
 import (
 	"context"
 	"net"
+	"strings"
 	"time"
 
 	"git.sgu.ru/ultramarine/syslog4switches/helpers"
@@ -60,6 +61,10 @@ func SaveMailLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts) {
 	l, err := parsers.ParseMailLog(logmap)
 	if err != nil {
 		log.Warnf("mail: error parsing log: %v", err)
+		return
+	}
+
+	if !(l.Service == "dovecot" && strings.Contains(l.Message, "expunged")) {
 		return
 	}
 
