@@ -98,24 +98,27 @@ func ParseNginxLog(logmap format.LogParts) (nginxLog, error) {
 			}
 		case "facility":
 			{
-				l.Facility, ok = val.(uint8)
+				facility, ok := val.(int)
 				if !ok {
 					return l, errors.New("facility wrong type")
 				}
+				l.Facility = uint8(facility)
 			}
 		case "severity":
 			{
-				l.Severity, ok = val.(uint8)
+				severity, ok := val.(int)
 				if !ok {
 					return l, errors.New("severity wrong type")
 				}
+				l.Severity = uint8(severity)
 			}
 		case "priority":
 			{
-				l.Priority, ok = val.(uint8)
+				priority, ok := val.(int)
 				if !ok {
 					return l, errors.New("priority wrong type")
 				}
+				l.Priority = uint8(priority)
 			}
 		}
 	}
@@ -155,24 +158,27 @@ func ParseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (switch
 			}
 		case "facility":
 			{
-				l.Facility, ok = val.(uint8)
+				facility, ok := val.(int)
 				if !ok {
 					return l, errors.New("facility wrong type")
 				}
+				l.Facility = uint8(facility)
 			}
 		case "severity":
 			{
-				l.Severity, ok = val.(uint8)
+				severity, ok := val.(int)
 				if !ok {
 					return l, errors.New("severity wrong type")
 				}
+				l.Severity = uint8(severity)
 			}
 		case "priority":
 			{
-				l.Priority, ok = val.(uint8)
+				priority, ok := val.(int)
 				if !ok {
 					return l, errors.New("priority wrong type")
 				}
+				l.Priority = uint8(priority)
 			}
 		}
 	}
