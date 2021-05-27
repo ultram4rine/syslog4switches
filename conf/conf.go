@@ -21,7 +21,7 @@ func Load(confName string) error {
 		log.Warnf("Error decoding config file from %s: %s", confName, err)
 	}
 
-	viper.SetEnvPrefix("s4s")
+	viper.SetEnvPrefix("slog")
 	if err := viper.BindEnv("db_host"); err != nil {
 		return err
 	}
