@@ -42,18 +42,16 @@ func GetSwitchNameSNMP(ip string) (string, error) {
 		return "", err
 	}
 
-	var (
-		name string
-		ok   bool
-	)
+	var name string
 
 	for _, v := range result.Variables {
 		switch v.Name {
 		case sysName:
-			name, ok = v.Value.(string)
+			nameBytes, ok := v.Value.([]uint8)
 			if !ok {
 				return "", errors.New("wrong interface type")
 			}
+			name = string(nameBytes)
 		default:
 			return "", errors.New("wrong OID")
 		}
