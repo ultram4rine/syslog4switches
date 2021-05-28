@@ -12,6 +12,7 @@ var Config struct {
 	DBUser        string `mapstructure:"db_user"`
 	DBPass        string `mapstructure:"db_pass"`
 	NetDataServer string `mapstructure:"netdata_server"`
+	BatchSize     int64  `mapstructure:"batch_size"`
 }
 
 // Load parses the config from file or from ENV variables s into a Config.
@@ -36,6 +37,9 @@ func Load(confName string) error {
 		return err
 	}
 	if err := viper.BindEnv("netdata_server"); err != nil {
+		return err
+	}
+	if err := viper.BindEnv("batch_size"); err != nil {
 		return err
 	}
 

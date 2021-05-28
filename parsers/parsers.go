@@ -126,7 +126,7 @@ func ParseNginxLog(logmap format.LogParts) (nginxLog, error) {
 	return l, nil
 }
 
-func ParseSwitchLog(logmap format.LogParts, IPNameMap map[string]string) (switchLog, error) {
+func ParseSwitchLog(logmap format.LogParts) (switchLog, error) {
 	var (
 		l  switchLog
 		ok bool

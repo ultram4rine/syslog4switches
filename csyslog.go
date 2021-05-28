@@ -1,19 +1,10 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"strings"
-	"time"
-
 	"git.sgu.ru/ultramarine/custom_syslog/conf"
-	"git.sgu.ru/ultramarine/custom_syslog/helpers"
-	"git.sgu.ru/ultramarine/custom_syslog/savers"
-	"google.golang.org/grpc"
+	"git.sgu.ru/ultramarine/custom_syslog/server"
 
-	pb "git.sgu.ru/sgu/netdataserv/netdataproto"
 	_ "github.com/ClickHouse/clickhouse-go"
-	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/mcuadros/go-syslog.v2"
@@ -24,77 +15,46 @@ var confname = kingpin.Flag("conf", "Path to config file.").Short('c').Default("
 func main() {
 	kingpin.Parse()
 
-	if err := conf.Load(*confname); err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+	var s server.Server
+	if err := s.Init(confname); err != nil {
+		log.Fatalf("failed to init server: %v", err)
 	}
 
-	var ctx = context.Background()
-
-	db, err := sqlx.ConnectContext(ctx, "clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
-	if err != nil {
-		log.Fatalf("Error connecting to database: %v", err)
+	logsChan := make(syslog.LogPartsChannel, 1000)
+	handler := syslog.NewChannelHandler(logsChan)
+	s.SyslogServer = syslog.NewServer()
+	s.SyslogServer.SetFormat(syslog.Automatic)
+	s.SyslogServer.SetHandler(handler)
+	if err := s.SyslogServer.ListenUDP(":514"); err != nil {
+		log.Fatalf("failed to set syslog server listen for UDP: %v", err)
 	}
-	defer db.Close()
-
-	conn, err := grpc.Dial(conf.Config.NetDataServer, grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("error connecting to netdata server: %v", err)
-	}
-	defer conn.Close()
-	log.Info("connected to netdata server")
-
-	client := pb.NewNetDataClient(conn)
-	IPNameMap, err := helpers.GetSwitches(client)
-	if err != nil {
-		log.Warnf("error getting switches from netdataserv: %v", err)
-	}
-
-	channel := make(syslog.LogPartsChannel, 1000)
-	handler := syslog.NewChannelHandler(channel)
-
-	server := syslog.NewServer()
-	server.SetFormat(syslog.Automatic)
-	server.SetHandler(handler)
-
-	if err = server.ListenUDP(":514"); err != nil {
-		log.Fatalf("Error configuring server for UDP listen: %v", err)
-	}
-
-	if err = server.Boot(); err != nil {
-		log.Fatalf("Error starting server: %v", err)
-	}
-
-	loc, err := time.LoadLocation("Europe/Saratov")
-	if err != nil {
-		log.Fatalf("Error getting time zone: %v", err)
+	if err := s.SyslogServer.Boot(); err != nil {
+		log.Fatalf("failed to start server: %v", err)
 	}
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
 			log.Infof("Received log from %v", logmap["client"])
 
-			tag, ok := logmap["tag"].(string)
-			if !ok {
-				log.Warn("tag wrong type")
-				continue
+			if s.Tx == nil {
+				if err := s.InitSQL(); err != nil {
+					log.Fatalf("sql init error: %v", err)
+				}
 			}
 
-			switch {
-			case tag == "nginx":
-				if err := savers.SaveNginxLog(ctx, db, logmap); err != nil {
-					log.Warnf("nginx: %v", err)
-				}
-			case strings.Contains(tag, "postfix") || strings.Contains(tag, "dovecot"):
-				if err := savers.SaveMailLog(ctx, db, logmap, loc); err != nil {
-					log.Warnf("mail: %v", err)
-				}
-			case tag == "":
-				if err := savers.SaveSwitchLog(ctx, db, logmap, loc, IPNameMap); err != nil {
-					log.Warnf("switch: %v", err)
+			if err := s.ProcessLog(logmap); err != nil {
+				log.Error(err)
+				continue
+			}
+			s.Rows++
+
+			if s.Rows > conf.Config.BatchSize {
+				if err := s.Flush(); err != nil {
+					log.Fatalf("flushing error: %v", err)
 				}
 			}
 		}
-	}(channel)
+	}(logsChan)
 
-	server.Wait()
+	s.SyslogServer.Wait()
 }
