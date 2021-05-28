@@ -2,6 +2,7 @@ package savers
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -20,90 +21,83 @@ const (
 	mailQuery   = "INSERT INTO mail (service, timestamp, message) VALUES (?, ?, ?)"
 )
 
-func SaveNginxLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts) {
+func SaveNginxLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts) error {
 	l, err := parsers.ParseNginxLog(logmap)
 	if err != nil {
-		log.Warnf("nginx: error parsing log: %v", err)
-		return
+		return fmt.Errorf("error parsing log: %v", err)
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		log.Warnf("nginx: error starting transaction: %v", err)
-		return
+		return fmt.Errorf("error starting transaction: %v", err)
 	}
 
 	stmt, err := tx.PreparexContext(ctx, nginxQuery)
 	if err != nil {
-		log.Warnf("nginx: error creating insert statement: %v", err)
 		if err := tx.Rollback(); err != nil {
-			log.Warnf("nginx: error aborting transaction: %v", err)
+			return fmt.Errorf("error aborting transaction: %v", err)
 		}
-		return
+		return fmt.Errorf("error creating insert statement: %v", err)
 	}
 	defer stmt.Close()
 
 	if _, err := stmt.ExecContext(ctx, l.Hostname, l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message); err != nil {
-		log.Warnf("nginx: error inserting log to database: %v", err)
 		if err := tx.Rollback(); err != nil {
-			log.Warnf("nginx: error aborting transaction: %v", err)
-			return
+			return fmt.Errorf("error aborting transaction: %v", err)
 		}
+		return fmt.Errorf("error inserting log to database: %v", err)
 	} else {
 		if err = tx.Commit(); err != nil {
-			log.Warnf("nginx: error commiting transaction: %v", err)
-			return
+			return fmt.Errorf("error commiting transaction: %v", err)
 		}
 	}
+
+	return nil
 }
 
-func SaveMailLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts, loc *time.Location) {
+func SaveMailLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts, loc *time.Location) error {
 	l, err := parsers.ParseMailLog(logmap)
 	if err != nil {
-		log.Warnf("mail: error parsing log: %v", err)
-		return
+		return fmt.Errorf("error parsing log: %v", err)
 	}
 
 	if l.Service == "dovecot" && !(strings.Contains(l.Message, "expunged")) {
-		return
+		return nil
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		log.Warnf("mail: error starting transaction: %v", err)
-		return
+		return fmt.Errorf("error starting transaction: %v", err)
 	}
 
 	stmt, err := tx.PreparexContext(ctx, mailQuery)
 	if err != nil {
-		log.Warnf("mail: error creating insert statement: %v", err)
 		if err := tx.Rollback(); err != nil {
-			log.Warnf("mail: error aborting transaction: %v", err)
+			return fmt.Errorf("error aborting transaction: %v", err)
 		}
-		return
+		return fmt.Errorf("error creating insert statement: %v", err)
 	}
 	defer stmt.Close()
 
 	// Substract 4 hours because parsing time from rsyslog don't sets current timezone.
 	if _, err := stmt.ExecContext(ctx, l.Service, l.TimeStamp.In(loc).Add(-4*time.Hour), l.Message); err != nil {
-		log.Warnf("mail: error inserting log to database: %v", err)
 		if err := tx.Rollback(); err != nil {
-			log.Warnf("mail: error aborting transaction: %v", err)
-			return
+			return fmt.Errorf("error aborting transaction: %v", err)
 		}
+		return fmt.Errorf("error inserting log to database: %v", err)
 	} else {
 		if err = tx.Commit(); err != nil {
-			log.Warnf("mail: error commiting transaction: %v", err)
-			return
+			return fmt.Errorf("error commiting transaction: %v", err)
 		}
 	}
+
+	return nil
 }
 
-func SaveSwitchLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts, loc *time.Location, IPNameMap map[string]string) {
+func SaveSwitchLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts, loc *time.Location, IPNameMap map[string]string) error {
 	l, err := parsers.ParseSwitchLog(logmap, IPNameMap)
 	if err != nil {
-		log.Warnf("switch: error parsing log: %v", err)
-		return
+		return fmt.Errorf("error parsing log: %v", err)
 	}
 
 	name, ok := IPNameMap[l.IP]
@@ -111,37 +105,34 @@ func SaveSwitchLog(ctx context.Context, db *sqlx.DB, logmap format.LogParts, loc
 		log.Infof("switch: unknown IP %s, going to find name via SNMP", l.IP)
 		name, err = helpers.GetSwitchNameSNMP(l.IP)
 		if err != nil {
-			log.Warnf("switch: error getting switch name by SNMP: %v", err)
-			return
+			return fmt.Errorf("error getting switch name by SNMP: %v", err)
 		}
 	}
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		log.Warnf("switch: error starting transaction: %v", err)
-		return
+		return fmt.Errorf("error starting transaction: %v", err)
 	}
 
 	stmt, err := tx.PreparexContext(ctx, switchQuery)
 	if err != nil {
-		log.Warnf("switch: error creating insert statement: %v", err)
 		if err := tx.Rollback(); err != nil {
-			log.Warnf("switch: error aborting transaction: %v", err)
+			return fmt.Errorf("error aborting transaction: %v", err)
 		}
-		return
+		return fmt.Errorf("error creating insert statement: %v", err)
 	}
 	defer stmt.Close()
 
 	if _, err := stmt.ExecContext(ctx, time.Now().In(loc), name, net.ParseIP(l.IP), l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message); err != nil {
-		log.Warnf("switch: error inserting log to database: %v", err)
 		if err := tx.Rollback(); err != nil {
-			log.Warnf("switch: error aborting transaction: %v", err)
-			return
+			return fmt.Errorf("error aborting transaction: %v", err)
 		}
+		return fmt.Errorf("error inserting log to database: %v", err)
 	} else {
 		if err = tx.Commit(); err != nil {
-			log.Warnf("switch: error commiting transaction: %v", err)
-			return
+			return fmt.Errorf("error commiting transaction: %v", err)
 		}
 	}
+
+	return nil
 }

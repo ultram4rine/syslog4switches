@@ -81,11 +81,17 @@ func main() {
 
 			switch {
 			case tag == "nginx":
-				savers.SaveNginxLog(ctx, db, logmap)
+				if err := savers.SaveNginxLog(ctx, db, logmap); err != nil {
+					log.Warnf("nginx: %v", err)
+				}
 			case strings.Contains(tag, "postfix") || strings.Contains(tag, "dovecot"):
-				savers.SaveMailLog(ctx, db, logmap, loc)
+				if err := savers.SaveMailLog(ctx, db, logmap, loc); err != nil {
+					log.Warnf("mail: %v", err)
+				}
 			case tag == "":
-				savers.SaveSwitchLog(ctx, db, logmap, loc, IPNameMap)
+				if err := savers.SaveSwitchLog(ctx, db, logmap, loc, IPNameMap); err != nil {
+					log.Warnf("switch: %v", err)
+				}
 			}
 		}
 	}(channel)
