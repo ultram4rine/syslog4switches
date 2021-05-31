@@ -1,7 +1,6 @@
 package main
 
 import (
-	"git.sgu.ru/ultramarine/custom_syslog/conf"
 	"git.sgu.ru/ultramarine/custom_syslog/server"
 
 	_ "github.com/ClickHouse/clickhouse-go"
@@ -36,22 +35,9 @@ func main() {
 		for logmap := range channel {
 			log.Infof("Received log from %v", logmap["client"])
 
-			if s.Tx == nil {
-				if err := s.InitSQL(); err != nil {
-					log.Fatalf("sql init error: %v", err)
-				}
-			}
-
 			if err := s.ProcessLog(logmap); err != nil {
 				log.Error(err)
 				continue
-			}
-			s.Rows++
-
-			if s.Rows > conf.Config.BatchSize {
-				if err := s.Flush(); err != nil {
-					log.Fatalf("flushing error: %v", err)
-				}
 			}
 		}
 	}(logsChan)

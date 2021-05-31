@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -29,32 +28,50 @@ const (
 type Server struct {
 	SyslogServer *syslog.Server
 
-	ctx  context.Context
-	DB   *sqlx.DB
-	Tx   *sqlx.Tx
-	Rows int64
+	NConn *sqlx.DB
+	MConn *sqlx.DB
+	SConn *sqlx.DB
+
+	NTx *sqlx.Tx
+	MTx *sqlx.Tx
+	STx *sqlx.Tx
+
+	NStmt *sqlx.Stmt
+	MStmt *sqlx.Stmt
+	SStmt *sqlx.Stmt
+
+	NRows int64
+	MRows int64
+	SRows int64
 
 	IPNameMap map[string]string
 	Loc       *time.Location
-
-	//NginxStmt  *sqlx.Stmt
-	//MailStmt   *sqlx.Stmt
-	//SwitchStmt *sqlx.Stmt
 }
 
 func (s *Server) Init(confname *string) error {
+	var err error
+
 	if err := conf.Load(*confname); err != nil {
 		return fmt.Errorf("failed to load configuration: %v", err)
 	}
 
-	s.ctx = context.Background()
-	var err error
-
-	s.DB, err = sqlx.ConnectContext(s.ctx, "clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
+	s.NConn, err = sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %v", err)
+		return fmt.Errorf("failed to create connection for nginx logs: %v", err)
 	}
-	defer s.DB.Close()
+	defer s.NConn.Close()
+
+	s.MConn, err = sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
+	if err != nil {
+		return fmt.Errorf("failed to create connection for mail logs: %v", err)
+	}
+	defer s.MConn.Close()
+
+	s.SConn, err = sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
+	if err != nil {
+		return fmt.Errorf("failed to create connection for switch logs: %v", err)
+	}
+	defer s.SConn.Close()
 
 	conn, err := grpc.Dial(conf.Config.NetDataServer, grpc.WithInsecure())
 	if err != nil {
@@ -73,40 +90,66 @@ func (s *Server) Init(confname *string) error {
 		return fmt.Errorf("failed to get location: %v", err)
 	}
 
-	if err := s.InitSQL(); err != nil {
+	if err := s.InitNginx(); err != nil {
+		return err
+	}
+	if err := s.InitMail(); err != nil {
+		return err
+	}
+	if err := s.InitSwitch(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *Server) InitSQL() (err error) {
-	s.Tx, err = s.DB.BeginTxx(s.ctx, nil)
+func (s *Server) InitNginx() (err error) {
+	s.NTx, err = s.NConn.Beginx()
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %v", err)
+		return fmt.Errorf("failed to begin transaction for nginx logs: %v", err)
 	}
 
-	/*s.NginxStmt, err = s.Tx.PreparexContext(s.ctx, nginxQuery)
+	s.NStmt, err = s.NTx.Preparex(nginxQuery)
 	if err != nil {
-		if err := s.Tx.Rollback(); err != nil {
-			return fmt.Errorf("error aborting transaction: %v", err)
+		if err := s.NTx.Rollback(); err != nil {
+			return fmt.Errorf("error aborting nginx transaction: %v", err)
 		}
 		return fmt.Errorf("error creating nginx statement: %v", err)
 	}
-	s.MailStmt, err = s.Tx.PreparexContext(s.ctx, mailQuery)
+
+	return nil
+}
+
+func (s *Server) InitMail() (err error) {
+	s.MTx, err = s.MConn.Beginx()
 	if err != nil {
-		if err := s.Tx.Rollback(); err != nil {
-			return fmt.Errorf("error aborting transaction: %v", err)
+		return fmt.Errorf("failed to begin transaction for mail logs: %v", err)
+	}
+
+	s.MStmt, err = s.MTx.Preparex(mailQuery)
+	if err != nil {
+		if err := s.MTx.Rollback(); err != nil {
+			return fmt.Errorf("error aborting mail transaction: %v", err)
 		}
 		return fmt.Errorf("error creating mail statement: %v", err)
 	}
-	s.SwitchStmt, err = s.Tx.PreparexContext(s.ctx, switchQuery)
+
+	return nil
+}
+
+func (s *Server) InitSwitch() (err error) {
+	s.STx, err = s.SConn.Beginx()
 	if err != nil {
-		if err := s.Tx.Rollback(); err != nil {
-			return fmt.Errorf("error aborting transaction: %v", err)
+		return fmt.Errorf("failed to begin transaction for switch logs: %v", err)
+	}
+
+	s.SStmt, err = s.STx.Preparex(switchQuery)
+	if err != nil {
+		if err := s.STx.Rollback(); err != nil {
+			return fmt.Errorf("error aborting switch transaction: %v", err)
 		}
 		return fmt.Errorf("error creating switch statement: %v", err)
-	}*/
+	}
 
 	return nil
 }
@@ -135,42 +178,87 @@ func (s *Server) ProcessLog(logmap format.LogParts) error {
 	return nil
 }
 
-func (s *Server) Flush() error {
-	if s.Rows == 0 {
+func (s *Server) FlushNginx() error {
+	if s.NRows == 0 {
 		return nil
 	}
 
-	/*s.NginxStmt.Close()
-	s.NginxStmt = nil
-	s.MailStmt.Close()
-	s.MailStmt = nil
-	s.SwitchStmt.Close()
-	s.SwitchStmt = nil*/
+	s.NStmt.Close()
+	s.NStmt = nil
 
-	err := s.Tx.Commit()
-	s.Rows = 0
-	s.Tx = nil
+	err := s.NTx.Commit()
+	s.NRows = 0
+	s.NTx = nil
+
+	return err
+}
+
+func (s *Server) FlushMail() error {
+	if s.MRows == 0 {
+		return nil
+	}
+
+	s.MStmt.Close()
+	s.MStmt = nil
+
+	err := s.MTx.Commit()
+	s.MRows = 0
+	s.MTx = nil
+
+	return err
+}
+
+func (s *Server) FlushSwitch() error {
+	if s.SRows == 0 {
+		return nil
+	}
+
+	s.SStmt.Close()
+	s.SStmt = nil
+
+	err := s.STx.Commit()
+	s.SRows = 0
+	s.STx = nil
 
 	return err
 }
 
 func (s *Server) saveNginxLog(logmap format.LogParts) error {
+	if s.NStmt == nil {
+		if err := s.InitNginx(); err != nil {
+			return fmt.Errorf("error initializing nginx tx and stmt: %v", err)
+		}
+	}
+
 	l, err := parsers.ParseNginxLog(logmap)
 	if err != nil {
 		return fmt.Errorf("error parsing log: %v", err)
 	}
 
-	if _, err := s.Tx.ExecContext(s.ctx, nginxQuery, l.Hostname, l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message); err != nil {
-		if err := s.Tx.Rollback(); err != nil {
+	if _, err := s.NStmt.Exec(l.Hostname, l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message); err != nil {
+		if err := s.NTx.Rollback(); err != nil {
 			return fmt.Errorf("error aborting transaction: %v", err)
 		}
 		return fmt.Errorf("error inserting log to database: %v", err)
+	}
+
+	s.NRows++
+	if s.NRows >= conf.Config.NginxBatchSize {
+		if err := s.FlushNginx(); err != nil {
+			return fmt.Errorf("error commiting nginx tx: %v", err)
+		}
 	}
 
 	return nil
 }
 
 func (s *Server) saveMailLog(logmap format.LogParts) error {
+	if s.MStmt == nil {
+		if err := s.InitMail(); err != nil {
+			return fmt.Errorf("error initializing mail tx and stmt: %v", err)
+		}
+	}
+
 	l, err := parsers.ParseMailLog(logmap)
 	if err != nil {
 		return fmt.Errorf("error parsing log: %v", err)
@@ -181,17 +269,30 @@ func (s *Server) saveMailLog(logmap format.LogParts) error {
 	}
 
 	// Substract 4 hours because parsing time from rsyslog don't sets current timezone.
-	if _, err := s.Tx.ExecContext(s.ctx, mailQuery, l.Service, l.TimeStamp.In(s.Loc).Add(-4*time.Hour), l.Message); err != nil {
-		if err := s.Tx.Rollback(); err != nil {
+	if _, err := s.MStmt.Exec(l.Service, l.TimeStamp.In(s.Loc).Add(-4*time.Hour), l.Message); err != nil {
+		if err := s.MTx.Rollback(); err != nil {
 			return fmt.Errorf("error aborting transaction: %v", err)
 		}
 		return fmt.Errorf("error inserting log to database: %v", err)
+	}
+
+	s.MRows++
+	if s.MRows >= conf.Config.MailBatchSize {
+		if err := s.FlushMail(); err != nil {
+			return fmt.Errorf("error commiting mail tx: %v", err)
+		}
 	}
 
 	return nil
 }
 
 func (s *Server) saveSwitchLog(logmap format.LogParts) error {
+	if s.SStmt == nil {
+		if err := s.InitSwitch(); err != nil {
+			return fmt.Errorf("error initializing switch tx and stmt: %v", err)
+		}
+	}
+
 	l, err := parsers.ParseSwitchLog(logmap)
 	if err != nil {
 		return fmt.Errorf("error parsing log: %v", err)
@@ -207,11 +308,18 @@ func (s *Server) saveSwitchLog(logmap format.LogParts) error {
 		s.IPNameMap[l.IP] = name
 	}
 
-	if _, err := s.Tx.ExecContext(s.ctx, switchQuery, time.Now().In(s.Loc), name, net.ParseIP(l.IP), l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message); err != nil {
-		if err := s.Tx.Rollback(); err != nil {
+	if _, err := s.SStmt.Exec(time.Now().In(s.Loc), name, net.ParseIP(l.IP), l.TimeStamp, l.Facility, l.Severity, l.Priority, l.Message); err != nil {
+		if err := s.STx.Rollback(); err != nil {
 			return fmt.Errorf("error aborting transaction: %v", err)
 		}
 		return fmt.Errorf("error inserting log to database: %v", err)
+	}
+
+	s.SRows++
+	if s.SRows >= conf.Config.SwitchBatchSize {
+		if err := s.FlushSwitch(); err != nil {
+			return fmt.Errorf("error commiting switch tx: %v", err)
+		}
 	}
 
 	return nil
