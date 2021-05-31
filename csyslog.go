@@ -3,7 +3,6 @@ package main
 import (
 	"git.sgu.ru/ultramarine/custom_syslog/server"
 
-	_ "github.com/ClickHouse/clickhouse-go"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/mcuadros/go-syslog.v2"
@@ -18,9 +17,7 @@ func main() {
 	if err := s.Init(confname); err != nil {
 		log.Fatalf("failed to init server: %v", err)
 	}
-	defer s.NConn.Close()
-	defer s.MConn.Close()
-	defer s.SConn.Close()
+	defer s.Conn.Close()
 
 	logsChan := make(syslog.LogPartsChannel, 1000)
 	handler := syslog.NewChannelHandler(logsChan)
