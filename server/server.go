@@ -180,6 +180,8 @@ func (s *Server) FlushNginx() error {
 		return nil
 	}
 
+	log.Info("committing nginx logs")
+
 	s.NStmt.Close()
 	s.NStmt = nil
 
@@ -195,6 +197,8 @@ func (s *Server) FlushMail() error {
 		return nil
 	}
 
+	log.Info("committing mail logs")
+
 	s.MStmt.Close()
 	s.MStmt = nil
 
@@ -209,6 +213,8 @@ func (s *Server) FlushSwitch() error {
 	if s.SRows == 0 {
 		return nil
 	}
+
+	log.Info("committing switch logs")
 
 	s.SStmt.Close()
 	s.SStmt = nil
