@@ -59,19 +59,16 @@ func (s *Server) Init(confname *string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create connection for nginx logs: %v", err)
 	}
-	defer s.NConn.Close()
 
 	s.MConn, err = sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
 	if err != nil {
 		return fmt.Errorf("failed to create connection for mail logs: %v", err)
 	}
-	defer s.MConn.Close()
 
 	s.SConn, err = sqlx.Connect("clickhouse", fmt.Sprintf("%s?username=%s&password=%s&database=%s", conf.Config.DBHost, conf.Config.DBUser, conf.Config.DBPass, conf.Config.DBName))
 	if err != nil {
 		return fmt.Errorf("failed to create connection for switch logs: %v", err)
 	}
-	defer s.SConn.Close()
 
 	conn, err := grpc.Dial(conf.Config.NetDataServer, grpc.WithInsecure())
 	if err != nil {

@@ -18,6 +18,9 @@ func main() {
 	if err := s.Init(confname); err != nil {
 		log.Fatalf("failed to init server: %v", err)
 	}
+	defer s.NConn.Close()
+	defer s.MConn.Close()
+	defer s.SConn.Close()
 
 	logsChan := make(syslog.LogPartsChannel, 1000)
 	handler := syslog.NewChannelHandler(logsChan)
@@ -33,8 +36,6 @@ func main() {
 
 	go func(channel syslog.LogPartsChannel) {
 		for logmap := range channel {
-			log.Infof("Received log from %v", logmap["client"])
-
 			if err := s.ProcessLog(logmap); err != nil {
 				log.Error(err)
 				continue
