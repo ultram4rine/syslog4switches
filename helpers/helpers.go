@@ -9,9 +9,7 @@ import (
 )
 
 func GetSwitches(c pb.NetDataClient) (map[string]string, error) {
-	var ctx = context.Background()
-
-	switches, err := c.GetNetworkSwitches(ctx, &pb.GetNetworkSwitchesRequest{})
+	switches, err := c.GetNetworkSwitches(context.Background(), &pb.GetNetworkSwitchesRequest{})
 	if err != nil {
 		return nil, err
 	}
