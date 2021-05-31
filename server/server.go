@@ -115,6 +115,10 @@ func (s *Server) saveNginxLog(logmap format.LogParts) error {
 			return fmt.Errorf("error aborting transaction: %v", err)
 		}
 		return fmt.Errorf("error inserting log to database: %v", err)
+	} else {
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("error commiting transaction: %v", err)
+		}
 	}
 
 	return nil
@@ -141,6 +145,10 @@ func (s *Server) saveMailLog(logmap format.LogParts) error {
 			return fmt.Errorf("error aborting transaction: %v", err)
 		}
 		return fmt.Errorf("error inserting log to database: %v", err)
+	} else {
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("error commiting transaction: %v", err)
+		}
 	}
 
 	return nil
@@ -172,6 +180,10 @@ func (s *Server) saveSwitchLog(logmap format.LogParts) error {
 			return fmt.Errorf("error aborting transaction: %v", err)
 		}
 		return fmt.Errorf("error inserting log to database: %v", err)
+	} else {
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("error commiting transaction: %v", err)
+		}
 	}
 
 	return nil
